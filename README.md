@@ -1,4 +1,4 @@
-# BurpKotlinExtensionTemplate
+# BurpExtensionTemplate
 
 This is just a starting point for Burp extensions in Kotlin.
 
