@@ -1,5 +1,5 @@
 plugins {
-	kotlin("jvm") version "2.3.10"
+	kotlin("jvm") version "2.4.10"
 	id("com.gradleup.shadow") version "9.4.1"
 }
 
@@ -12,7 +12,7 @@ repositories {
 
 dependencies {
 	implementation(kotlin("stdlib"))
-	compileOnly("net.portswigger.burp.extensions:montoya-api:2026.4")
+	compileOnly("net.portswigger.burp.extensions:montoya-api:2026.7")
 }
 
 kotlin {
