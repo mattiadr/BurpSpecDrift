@@ -15,3 +15,8 @@ After cloning make the following changes:
   - Change extension name
   - Optionally rename this class
 - Create gradle shadowJar run configuration
+
+### GitHub Actions
+
+This repository includes a GitHub action to automatically create a new release when a version tag `v*` is pushed.
+If you want to disable this behavior remove the file `.github/workflows/release.yml`.
