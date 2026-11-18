@@ -9,28 +9,21 @@ import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.Component
 import java.awt.Dimension
-import java.awt.event.MouseAdapter
-import java.awt.event.MouseEvent
 import java.io.File
 import javax.swing.Box
 import javax.swing.BorderFactory
 import javax.swing.BoxLayout
-import javax.swing.DefaultListCellRenderer
 import javax.swing.JButton
-import javax.swing.JComboBox
 import javax.swing.JFileChooser
 import javax.swing.JLabel
-import javax.swing.JList
 import javax.swing.JOptionPane
 import javax.swing.JPanel
 import javax.swing.JScrollPane
 import javax.swing.JSplitPane
 import javax.swing.JTextArea
-import javax.swing.ListCellRenderer
 import javax.swing.SwingConstants
 import javax.swing.SwingUtilities
 import javax.swing.UIManager
-import javax.swing.plaf.basic.ComboPopup
 
 /**
  * View for a single SpecDrift tab. Holds no live data itself: parse results are written
@@ -45,12 +38,9 @@ class SpecTab(val data: SpecTabData) {
 	private val urlField = HintTextField(40)
 	private val loadUrlButton = JButton("Load from URL")
 	private val loadFileButton = JButton("Load from File")
-	private val baseOverrideCombo = JComboBox<String>()
+	private val baseOverrideButton = JButton("<none>")
 
-	/** Guards the combo's action listener while we repopulate it programmatically. */
-	private var updatingCombo = false
-
-	private val tablePanel = EndpointTablePanel()
+	private val tablePanel = EndpointTablePanel(data)
 	private val detailArea = JTextArea(6, 60).apply {
 		isEditable = false
 	}
@@ -71,94 +61,55 @@ class SpecTab(val data: SpecTabData) {
 	init {
 		loadUrlButton.addActionListener { onLoadUrl() }
 		loadFileButton.addActionListener { onLoadFile() }
-		baseOverrideCombo.addActionListener { onBaseOverrideSelected() }
-		configureBaseCombo()
+		baseOverrideButton.addActionListener { openBaseOverridePopup() }
+		configureBaseOverrideButton()
 		capWidthToPreferred(urlField)
 		tablePanel.onRowSelected = { row -> showDetail(row) }
+		data.onBasesChanged = { onBasesChanged() }
 		detailArea.text = summaryText
-		rebuildBaseCombo()
+		updateBaseOverrideButton()
 	}
 
-	/** Fixes the combo width (minimum) and mutes the non-base sentinel entries. */
-	private fun configureBaseCombo() {
-		val height = baseOverrideCombo.preferredSize.height
-		val size = Dimension(BASE_COMBO_WIDTH, height)
-		baseOverrideCombo.minimumSize = size
-		baseOverrideCombo.preferredSize = size
-		baseOverrideCombo.maximumSize = size
-		baseOverrideCombo.renderer = BaseComboRenderer()
-		attachRemoveHandler()
+	/** Reacts to the shared base list changing (add/remove from either dropdown). */
+	private fun onBasesChanged() {
+		updateBaseOverrideButton()
+		tablePanel.setGlobalOverride(data.baseOverride)
 	}
 
-	/**
-	 * Renders combo items with no selection highlight, a muted "<none>", and a trailing "✕"
-	 * on removable (user-added) bases. The "✕" is only shown in the popup, not when collapsed.
-	 */
-	private inner class BaseComboRenderer : ListCellRenderer<Any?> {
-		private val delegate = DefaultListCellRenderer()
-		private val panel = JPanel(BorderLayout())
-		private val closeLabel = JLabel("✕", SwingConstants.CENTER).apply {
-			preferredSize = Dimension(X_HIT_WIDTH, preferredSize.height)
-		}
-
-		override fun getListCellRendererComponent(
-			list: JList<out Any?>,
-			value: Any?,
-			index: Int,
-			isSelected: Boolean,
-			cellHasFocus: Boolean,
-		): Component {
-			// Force unselected look so the popup has no blue selection highlight.
-			val label = delegate.getListCellRendererComponent(list, value, index, false, false) as JLabel
-			if (value == NONE_ITEM) label.foreground = Color.GRAY
-			val rowHeight = label.preferredSize.height
-
-			val removable = index >= 0 && value is String && data.isCustomBase(value)
-			if (!removable) {
-				// Cap width so long items don't trigger horizontal scrolling in the popup.
-				label.preferredSize = Dimension(ITEM_WIDTH, rowHeight)
-				return label
-			}
-
-			panel.removeAll()
-			panel.isOpaque = true
-			panel.background = label.background
-			label.preferredSize = null // let the label fill the center and ellipsize if long
-			closeLabel.foreground = label.foreground
-			panel.add(label, BorderLayout.CENTER)
-			panel.add(closeLabel, BorderLayout.EAST)
-			panel.preferredSize = Dimension(ITEM_WIDTH, rowHeight)
-			return panel
-		}
+	/** Fixes the button width and left-aligns its text, combo-style. */
+	private fun configureBaseOverrideButton() {
+		val size = Dimension(BASE_COMBO_WIDTH, baseOverrideButton.preferredSize.height)
+		baseOverrideButton.minimumSize = size
+		baseOverrideButton.preferredSize = size
+		baseOverrideButton.maximumSize = size
+		baseOverrideButton.horizontalAlignment = SwingConstants.LEFT
 	}
 
-	/** Lets a click on the trailing "✕" of a removable base delete it from the list. */
-	private fun attachRemoveHandler() {
-		val popup = baseOverrideCombo.ui.getAccessibleChild(baseOverrideCombo, 0) as? ComboPopup ?: return
-		val list = popup.list
-		list.addMouseListener(object : MouseAdapter() {
-			override fun mousePressed(e: MouseEvent) {
-				val index = list.locationToIndex(e.point)
-				if (index < 0) return
-				val value = list.model.getElementAt(index) as? String ?: return
-				if (!data.isCustomBase(value)) return
-				val bounds = list.getCellBounds(index, index) ?: return
-				if (e.x < bounds.x + bounds.width - X_HIT_WIDTH) return
-				e.consume()
-				baseOverrideCombo.hidePopup()
-				SwingUtilities.invokeLater {
-					data.removeCustomBase(value)
-					rebuildBaseCombo()
-				}
-			}
-		})
+	/** Shows the current global override on the button, muted when none. */
+	private fun updateBaseOverrideButton() {
+		val override = data.baseOverride
+		baseOverrideButton.text = override ?: "<none>"
+		baseOverrideButton.foreground =
+			if (override == null) Color.GRAY else UIManager.getColor("Button.foreground")
 	}
 
-	/** Mutes the combo's own text when "<none>" is the current selection (shown collapsed). */
-	private fun updateComboForeground() {
-		baseOverrideCombo.foreground =
-			if (baseOverrideCombo.selectedItem == NONE_ITEM) Color.GRAY
-			else UIManager.getColor("ComboBox.foreground")
+	/** Opens the shared base dropdown anchored below the button (tab-level override). */
+	private fun openBaseOverridePopup() {
+		BasePopup.show(
+			invoker = baseOverrideButton,
+			x = 0,
+			y = baseOverrideButton.height,
+			data = data,
+			firstLabel = "<none>",
+			onFirst = { applyGlobalOverride(null) },
+			onSelectBase = { applyGlobalOverride(it) },
+		)
+	}
+
+	private fun applyGlobalOverride(value: String?) {
+		data.baseOverride = value
+		updateBaseOverrideButton()
+		tablePanel.setGlobalOverride(value)
 	}
 
 	private fun capWidthToPreferred(component: Component) {
@@ -176,50 +127,8 @@ class SpecTab(val data: SpecTabData) {
 		add(loadFileButton)
 		add(Box.createHorizontalStrut(24))
 		add(JLabel("Base Override: "))
-		add(baseOverrideCombo)
+		add(baseOverrideButton)
 		add(Box.createHorizontalGlue())
-	}
-
-	/** Repopulates the combo: "<none>", the sorted available bases, then a trailing "+ Add". */
-	private fun rebuildBaseCombo() {
-		updatingCombo = true
-		try {
-			baseOverrideCombo.removeAllItems()
-			baseOverrideCombo.addItem(NONE_ITEM)
-			data.availableBases().sorted().forEach { baseOverrideCombo.addItem(it) }
-			baseOverrideCombo.addItem(ADD_ITEM)
-			baseOverrideCombo.selectedItem = data.baseOverride ?: NONE_ITEM
-		} finally {
-			updatingCombo = false
-		}
-		updateComboForeground()
-	}
-
-	private fun onBaseOverrideSelected() {
-		if (updatingCombo) return
-		when (val selected = baseOverrideCombo.selectedItem as? String ?: return) {
-			NONE_ITEM -> data.baseOverride = null
-			ADD_ITEM -> promptAddBase()
-			else -> data.baseOverride = selected
-		}
-		updateComboForeground()
-	}
-
-	private fun promptAddBase() {
-		val input = JOptionPane.showInputDialog(
-			component,
-			"New base URL:",
-			"Add base override",
-			JOptionPane.PLAIN_MESSAGE,
-		)
-		val base = input?.trim()
-		if (base.isNullOrEmpty()) {
-			rebuildBaseCombo() // revert the "+ Add" selection
-			return
-		}
-		data.addCustomBase(base)
-		data.baseOverride = base
-		rebuildBaseCombo()
 	}
 
 	private fun onLoadUrl() {
@@ -292,7 +201,8 @@ class SpecTab(val data: SpecTabData) {
 		if (api != null) {
 			data.onSpecLoaded(api, source)
 			tablePanel.setRows(data.endpoints)
-			rebuildBaseCombo()
+			tablePanel.setGlobalOverride(data.baseOverride)
+			updateBaseOverrideButton()
 		} else {
 			tablePanel.setRows(emptyList())
 		}
@@ -329,9 +239,9 @@ class SpecTab(val data: SpecTabData) {
 		}
 		val sb = StringBuilder()
 		sb.appendLine("Method:      ${row.method}")
-		sb.appendLine("Route:       ${row.route()}")
+		sb.appendLine("Route:       ${row.route(data.baseOverride)}")
 		sb.appendLine("Path:        ${row.path}")
-		sb.appendLine("Base:        ${row.specBase ?: "<none>"}")
+		sb.appendLine("Base:        ${row.effectiveBase(data.baseOverride) ?: "<none>"}")
 		if (row.alternativeBases.isNotEmpty()) {
 			sb.appendLine("Other bases: ${row.alternativeBases.joinToString()}")
 		}
@@ -355,20 +265,8 @@ class SpecTab(val data: SpecTabData) {
 	}
 
 	companion object {
-		/** Top combo entry that disables the override (muted). */
-		private const val NONE_ITEM = "<none>"
-
-		/** Trailing combo entry that prompts for a custom base (muted). */
-		private const val ADD_ITEM = "+  Add"
-
-		/** Minimum width of the base override combo. */
+		/** Width of the base override button. */
 		private const val BASE_COMBO_WIDTH = 300
-
-		/** Max preferred cell width in the popup (below the viewport, to avoid horizontal scroll). */
-		private const val ITEM_WIDTH = BASE_COMBO_WIDTH - 24
-
-		/** Width of the trailing "✕" hot zone (right edge) of a removable combo item. */
-		private const val X_HIT_WIDTH = 24
 
 		/** Last directory used by a file dialog, shared across tabs (Montoya exposes no global one). */
 		private var lastDirectory: File? = null

@@ -38,22 +38,28 @@ class SpecTabData(
 	/** Bases added manually by the user; kept across reloads. */
 	private val customBases = linkedSetOf<String>()
 
-	/** The currently selected tab-level base override. Not yet applied to routes. */
+	/** The currently selected tab-level base override. */
 	var baseOverride: String? = null
+
+	/** Invoked whenever the available base list changes, so every view can refresh. */
+	var onBasesChanged: (() -> Unit)? = null
 
 	/** All bases available for override: spec-declared plus user-added, de-duplicated. */
 	fun availableBases(): List<String> = (specBases + customBases).toList()
 
 	fun addCustomBase(base: String) {
-		customBases.add(base)
+		if (customBases.add(base)) onBasesChanged?.invoke()
 	}
 
 	/** A removable base: added by the user and not (also) declared by the spec. */
 	fun isCustomBase(base: String): Boolean = base in customBases && base !in specBases
 
 	fun removeCustomBase(base: String) {
-		customBases.remove(base)
+		if (!customBases.remove(base)) return
+		// Drop any override (global or per-route) that pointed at the removed base.
 		if (baseOverride == base) baseOverride = null
+		endpoints.forEach { if (it.routeOverride == base) it.routeOverride = null }
+		onBasesChanged?.invoke()
 	}
 
 	/** Records a successfully parsed spec: stores it, extracts endpoints, and names the tab. */
