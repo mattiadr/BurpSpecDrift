@@ -13,6 +13,7 @@ repositories {
 dependencies {
 	implementation(kotlin("stdlib"))
 	compileOnly("net.portswigger.burp.extensions:montoya-api:2026.7")
+	implementation("io.swagger.parser.v3:swagger-parser:2.1.22")
 }
 
 kotlin {
@@ -23,5 +24,8 @@ tasks {
 	shadowJar {
 		archiveClassifier = ""
 		archiveVersion = ""
+		// Merge META-INF/services so swagger-parser's ServiceLoader finds every
+		// SwaggerParserExtension (e.g. the Swagger 2.0 -> OpenAPI 3.0 converter).
+		mergeServiceFiles()
 	}
 }
