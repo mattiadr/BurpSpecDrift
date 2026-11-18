@@ -102,8 +102,8 @@ class EditableTabTitle(
 	private fun commitEditing() {
 		val newText = editor.text.trim()
 		if (newText.isNotEmpty()) {
-			data.rename(newText)
-			label.text = newText
+			data.renameByUser(newText)
+			label.text = data.name
 		}
 		stopEditing()
 	}

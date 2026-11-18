@@ -1,0 +1,74 @@
+openapi: 3.0.3
+info:
+  title: Multi-Server Demo
+  version: 1.0.0
+  description: >
+    Exercises server resolution at every level (root, path, operation) plus server
+    variables, to test base overrides.
+
+# Root-level servers: the first is the primary base, the others become alternativeBases.
+servers:
+  - url: https://api.example.com/v1
+    description: Production
+  - url: https://staging.example.com/v1
+    description: Staging
+  - url: https://{region}.example.com/{basePath}
+    description: Regional (templated, resolves to https://eu.example.com/v1 by default)
+    variables:
+      region:
+        default: eu
+        enum: [eu, us, ap]
+      basePath:
+        default: v1
+
+paths:
+  # Inherits the root servers: base = https://api.example.com/v1, two alternatives.
+  /users:
+    get:
+      operationId: listUsers
+      summary: List users
+      tags: [users]
+      responses:
+        "200": { description: OK }
+    post:
+      operationId: createUser
+      summary: Create a user
+      tags: [users]
+      responses:
+        "201": { description: Created }
+
+  # Path-level override: every operation here uses the dedicated users host.
+  /users/{id}:
+    servers:
+      - url: https://users.internal.example.com/v2
+        description: Dedicated users service
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getUser
+      summary: Get a user by id
+      tags: [users]
+      responses:
+        "200": { description: OK }
+    delete:
+      operationId: deleteUser
+      summary: Delete a user
+      tags: [users]
+      # Operation-level override wins over the path-level one.
+      servers:
+        - url: https://admin.example.com/v2
+          description: Admin-only host
+      responses:
+        "204": { description: No Content }
+
+  # Inherits the root servers again.
+  /health:
+    get:
+      operationId: health
+      summary: Health check
+      tags: [system]
+      responses:
+        "200": { description: OK }

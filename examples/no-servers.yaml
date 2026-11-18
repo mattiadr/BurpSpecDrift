@@ -1,0 +1,30 @@
+openapi: 3.0.3
+info:
+  title: No-Server Demo
+  version: 1.0.0
+  description: >
+    Declares no servers anywhere, so every endpoint has a null base (rendered as
+    <null>). Use it to test base overrides when the spec leaves the host unspecified.
+
+paths:
+  /ping:
+    get:
+      operationId: ping
+      summary: Ping
+      tags: [system]
+      responses:
+        "200": { description: OK }
+
+  /items:
+    get:
+      operationId: listItems
+      summary: List items
+      tags: [items]
+      responses:
+        "200": { description: OK }
+    post:
+      operationId: createItem
+      summary: Create an item
+      tags: [items]
+      responses:
+        "201": { description: Created }
