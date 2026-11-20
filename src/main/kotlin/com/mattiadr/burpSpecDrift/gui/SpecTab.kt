@@ -5,6 +5,7 @@ import com.mattiadr.burpSpecDrift.model.EndpointRow
 import com.mattiadr.burpSpecDrift.model.SpecTabData
 import com.mattiadr.burpSpecDrift.spec.SpecParseResult
 import com.mattiadr.burpSpecDrift.spec.SpecParser
+import io.swagger.v3.oas.models.OpenAPI
 import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.Component
@@ -68,6 +69,7 @@ class SpecTab(val data: SpecTabData) {
 		data.onBasesChanged = { onBasesChanged() }
 		detailArea.text = summaryText
 		updateBaseOverrideButton()
+		if (data.hasLoadedSpec) renderRestored()
 	}
 
 	/** Reacts to the shared base list changing (add/remove from either dropdown). */
@@ -199,7 +201,7 @@ class SpecTab(val data: SpecTabData) {
 	private fun renderResult(source: String, result: SpecParseResult) {
 		val api = result.openAPI
 		if (api != null) {
-			data.onSpecLoaded(api, source)
+			data.onSpecLoaded(api, source, SpecParser.toJson(api))
 			tablePanel.setRows(data.endpoints)
 			tablePanel.setGlobalOverride(data.baseOverride)
 			updateBaseOverrideButton()
@@ -207,6 +209,22 @@ class SpecTab(val data: SpecTabData) {
 			tablePanel.setRows(emptyList())
 		}
 
+		setSummary(buildSummary(source, api, data.endpoints.size, result.messages))
+		AppContext.logging.logToOutput("[SpecDrift] $source -> success=${result.isSuccess}")
+
+		if (result.isSuccess) {
+			onSpecLoaded?.invoke()
+		}
+	}
+
+	/** Reflects a spec already present in [data] (e.g. restored from the project file). */
+	private fun renderRestored() {
+		tablePanel.setRows(data.endpoints)
+		tablePanel.setGlobalOverride(data.baseOverride)
+		setSummary(buildSummary(data.source ?: "Restored", data.openAPI, data.endpoints.size, emptyList()))
+	}
+
+	private fun buildSummary(source: String, api: OpenAPI?, endpointCount: Int, messages: List<String>): String {
 		val sb = StringBuilder()
 		sb.appendLine(source)
 		if (api != null) {
@@ -214,21 +232,16 @@ class SpecTab(val data: SpecTabData) {
 			sb.appendLine("Title:    ${info?.title ?: "-"}")
 			sb.appendLine("Version:  ${info?.version ?: "-"}")
 			sb.appendLine("OpenAPI:  ${api.openapi ?: "-"}")
-			sb.appendLine("Endpoints: ${data.endpoints.size}")
+			sb.appendLine("Endpoints: $endpointCount")
 		} else {
 			sb.appendLine("Parsing failed.")
 		}
-		if (result.messages.isNotEmpty()) {
+		if (messages.isNotEmpty()) {
 			sb.appendLine()
 			sb.appendLine("Messages:")
-			result.messages.forEach { sb.appendLine("  - $it") }
+			messages.forEach { sb.appendLine("  - $it") }
 		}
-		setSummary(sb.toString())
-		AppContext.logging.logToOutput("[SpecDrift] $source -> success=${result.isSuccess}")
-
-		if (result.isSuccess) {
-			onSpecLoaded?.invoke()
-		}
+		return sb.toString()
 	}
 
 	/** Shows either the selected endpoint's detail, or the load summary when nothing is selected. */

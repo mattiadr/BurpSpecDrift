@@ -140,6 +140,7 @@ class EndpointTablePanel(private val data: SpecTabData) {
 	private fun setOverride(endpoint: EndpointRow, override: String?) {
 		endpoint.routeOverride = override
 		model.refresh()
+		data.notifyChanged()
 	}
 
 	/** Right-click menu acting on the selected routes. */
@@ -160,8 +161,8 @@ class EndpointTablePanel(private val data: SpecTabData) {
 			BasePopup.buildList(
 				data = data,
 				firstLabel = "<none>",
-				onFirst = { routes.forEach { it.routeOverride = null }; model.refresh() },
-				onSelectBase = { base -> routes.forEach { it.routeOverride = base }; model.refresh() },
+				onFirst = { routes.forEach { it.routeOverride = null }; model.refresh(); data.notifyChanged() },
+				onSelectBase = { base -> routes.forEach { it.routeOverride = base }; model.refresh(); data.notifyChanged() },
 				onDone = { MenuSelectionManager.defaultManager().clearSelectedPath() },
 			),
 		)

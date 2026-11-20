@@ -18,6 +18,12 @@ class SpecDriftModel {
 		return SpecTabData(tabCounter.toString()).also { mutableTabs.add(it) }
 	}
 
+	/** Appends a restored tab, keeping the default-name counter ahead of its number. */
+	fun addRestored(tab: SpecTabData) {
+		mutableTabs.add(tab)
+		tab.defaultName.toIntOrNull()?.let { tabCounter = maxOf(tabCounter, it) }
+	}
+
 	fun remove(tab: SpecTabData) {
 		mutableTabs.remove(tab)
 	}

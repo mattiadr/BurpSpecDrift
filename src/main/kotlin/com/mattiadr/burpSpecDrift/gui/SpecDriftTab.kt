@@ -1,7 +1,9 @@
 package com.mattiadr.burpSpecDrift.gui
 
+import com.mattiadr.burpSpecDrift.core.AppContext
 import com.mattiadr.burpSpecDrift.model.SpecDriftModel
 import com.mattiadr.burpSpecDrift.model.SpecTabData
+import com.mattiadr.burpSpecDrift.persistence.SpecDriftPersistence
 import java.awt.Component
 import java.awt.Font
 import java.awt.event.MouseAdapter
@@ -12,6 +14,7 @@ import javax.swing.JLabel
 import javax.swing.JOptionPane
 import javax.swing.JPanel
 import javax.swing.JTabbedPane
+import javax.swing.Timer
 
 /**
  * Top-level SpecDrift suite tab: a tabbed container of [SpecTab] views, Repeater-style,
@@ -21,6 +24,7 @@ import javax.swing.JTabbedPane
 class SpecDriftTab {
 
 	private val model = SpecDriftModel()
+	private val persistence = SpecDriftPersistence()
 
 	private val tabbedPane = JTabbedPane()
 	private val plusPanel = JPanel()
@@ -30,6 +34,10 @@ class SpecDriftTab {
 
 	/** Guards against the "+" tab reacting while we programmatically add/select/remove tabs. */
 	private var adjusting = false
+
+	/** Set by the (future) proxy handler when hit counts change, flushed by the timer. */
+	@Volatile
+	private var hitsDirty = false
 
 	val component: JComponent get() = tabbedPane
 
@@ -42,7 +50,36 @@ class SpecDriftTab {
 				addSpecTab()
 			}
 		}
-		addSpecTab()
+		restoreTabs()
+		startHitsFlush()
+	}
+
+	/** Restores persisted tabs, or creates an initial empty tab when there is nothing to restore. */
+	private fun restoreTabs() {
+		val restored = persistence.restore()
+		if (restored.isEmpty()) {
+			addSpecTab()
+			return
+		}
+		restored.forEach { data ->
+			model.addRestored(data)
+			installTab(data)
+		}
+		tabbedPane.selectedIndex = 0
+		updateCloseButtons()
+		persistence.saveOrder(model.tabs)
+	}
+
+	/** Periodically (and on unload) persists hit counts, only when they changed. */
+	private fun startHitsFlush() {
+		Timer(HITS_FLUSH_MS) { flushHits() }.apply { isRepeats = true }.start()
+		AppContext.api.extension().registerUnloadingHandler { flushHits() }
+	}
+
+	private fun flushHits() {
+		if (!hitsDirty) return
+		hitsDirty = false
+		model.tabs.forEach { persistence.saveHits(it) }
 	}
 
 	/** Shows the close button only on the currently selected tab. */
@@ -81,9 +118,17 @@ class SpecDriftTab {
 		tabsByComponent.values.firstOrNull { it.data === data }
 
 	private fun addSpecTab(): SpecTab {
+		val data = model.newTab()
+		val specTab = installTab(data)
+		persistence.saveTab(data, includeSpec = false)
+		persistence.saveOrder(model.tabs)
+		return specTab
+	}
+
+	/** Builds the view and tab component for an existing [data] and inserts it before "+". */
+	private fun installTab(data: SpecTabData): SpecTab {
 		adjusting = true
 		try {
-			val data = model.newTab()
 			val specTab = SpecTab(data)
 			val insertIndex = tabbedPane.indexOfComponent(plusPanel).takeIf { it >= 0 } ?: tabbedPane.tabCount
 			tabbedPane.insertTab(data.name, null, specTab.component, null, insertIndex)
@@ -91,7 +136,11 @@ class SpecDriftTab {
 
 			val title = EditableTabTitle(tabbedPane, data, ::closeTab)
 			tabbedPane.setTabComponentAt(insertIndex, title)
-			specTab.onSpecLoaded = { title.refreshFromData() }
+			specTab.onSpecLoaded = {
+				title.refreshFromData()
+				persistence.saveTab(data, includeSpec = true)
+			}
+			data.onChanged = { persistence.saveTab(data, includeSpec = false) }
 
 			tabbedPane.selectedIndex = insertIndex
 			updateCloseButtons()
@@ -124,6 +173,7 @@ class SpecDriftTab {
 		try {
 			tabsByComponent.remove(specTab.component)
 			model.remove(specTab.data)
+			persistence.removeTab(specTab.data)
 			tabbedPane.removeTabAt(idx)
 			// If the "+" tab ended up selected, fall back to the nearest real tab.
 			if (tabbedPane.selectedComponent === plusPanel) {
@@ -136,6 +186,11 @@ class SpecDriftTab {
 
 		// Keep at least one real spec tab around.
 		if (tabbedPane.tabCount <= 1) addSpecTab()
+		persistence.saveOrder(model.tabs)
 		updateCloseButtons()
+	}
+
+	companion object {
+		private const val HITS_FLUSH_MS = 30_000
 	}
 }

@@ -36,6 +36,9 @@ class EndpointRow(
 	/** This route's own base override, or null to fall back to the global/spec base. */
 	var routeOverride: String? = null
 
+	/** Stable identity of this route within a spec (unique: paths and methods don't repeat). */
+	fun key(): String = "$method $path"
+
 	/** The base this route would use without its own override (global override or spec base). */
 	fun defaultBase(globalOverride: String?): String? = globalOverride ?: specBase
 
