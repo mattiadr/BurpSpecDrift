@@ -1,18 +1,34 @@
 package com.mattiadr.burpSpecDrift.gui
 
+import burp.api.montoya.http.message.requests.HttpRequest
+import com.mattiadr.burpSpecDrift.core.AppContext
 import com.mattiadr.burpSpecDrift.model.BaseSource
 import com.mattiadr.burpSpecDrift.model.EndpointRow
 import com.mattiadr.burpSpecDrift.model.SpecTabData
+import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.Component
+import java.awt.Dimension
 import java.awt.Font
+import java.awt.event.ActionEvent
+import java.awt.event.InputEvent
+import java.awt.event.KeyEvent
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
+import javax.swing.AbstractAction
+import javax.swing.BorderFactory
+import javax.swing.JComponent
 import javax.swing.JLabel
+import javax.swing.JMenu
+import javax.swing.JMenuItem
+import javax.swing.JPopupMenu
 import javax.swing.JScrollPane
 import javax.swing.JTable
+import javax.swing.KeyStroke
 import javax.swing.ListSelectionModel
+import javax.swing.MenuSelectionManager
 import javax.swing.SwingConstants
+import javax.swing.SwingUtilities
 import javax.swing.table.DefaultTableCellRenderer
 import javax.swing.table.TableCellRenderer
 
@@ -32,6 +48,7 @@ class EndpointTablePanel(private val data: SpecTabData) {
 		columnModel.getColumn(EndpointTableModel.COL_BASE).apply {
 			cellRenderer = BaseRenderer()
 			minWidth = 150
+			width = 300
 			preferredWidth = 300
 		}
 		columnModel.getColumn(EndpointTableModel.COL_METHOD).apply {
@@ -55,12 +72,42 @@ class EndpointTablePanel(private val data: SpecTabData) {
 		}
 		table.addMouseListener(object : MouseAdapter() {
 			override fun mousePressed(event: MouseEvent) {
-				val viewRow = table.rowAtPoint(event.point)
-				val viewCol = table.columnAtPoint(event.point)
-				if (viewRow < 0 || viewCol < 0) return
-				if (table.convertColumnIndexToModel(viewCol) == EndpointTableModel.COL_BASE) {
-					showBasePopup(viewRow)
+				if (event.isPopupTrigger) {
+					showContextMenu(event)
+					return
 				}
+				if (SwingUtilities.isLeftMouseButton(event)) {
+					val viewRow = table.rowAtPoint(event.point)
+					val viewCol = table.columnAtPoint(event.point)
+					if (viewRow >= 0 && viewCol >= 0 &&
+						table.convertColumnIndexToModel(viewCol) == EndpointTableModel.COL_BASE
+					) {
+						showBasePopup(viewRow)
+					}
+				}
+			}
+
+			override fun mouseReleased(event: MouseEvent) {
+				if (event.isPopupTrigger) showContextMenu(event)
+			}
+		})
+		installShortcuts()
+	}
+
+	/** Ctrl+R / Ctrl+I send every selected route to Repeater / Intruder. */
+	private fun installShortcuts() {
+		val inputMap = table.getInputMap(JComponent.WHEN_FOCUSED)
+		val actionMap = table.actionMap
+		inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_R, InputEvent.CTRL_DOWN_MASK), "sendToRepeater")
+		inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_I, InputEvent.CTRL_DOWN_MASK), "sendToIntruder")
+		actionMap.put("sendToRepeater", object : AbstractAction() {
+			override fun actionPerformed(e: ActionEvent) {
+				selectedRoutes().forEach { sendToRepeater(it) }
+			}
+		})
+		actionMap.put("sendToIntruder", object : AbstractAction() {
+			override fun actionPerformed(e: ActionEvent) {
+				selectedRoutes().forEach { sendToIntruder(it) }
 			}
 		})
 	}
@@ -73,11 +120,6 @@ class EndpointTablePanel(private val data: SpecTabData) {
 	/** Sets the tab-level override so the Base column reflects it (and restyles). */
 	fun setGlobalOverride(value: String?) {
 		model.globalOverride = value
-	}
-
-	/** Repaints the Base column, e.g. after the available bases or overrides changed. */
-	fun refresh() {
-		model.refresh()
 	}
 
 	/** Shows the per-route base override dropdown below the clicked Base cell. */
@@ -98,6 +140,90 @@ class EndpointTablePanel(private val data: SpecTabData) {
 	private fun setOverride(endpoint: EndpointRow, override: String?) {
 		endpoint.routeOverride = override
 		model.refresh()
+	}
+
+	/** Right-click menu acting on the selected routes. */
+	private fun showContextMenu(event: MouseEvent) {
+		val viewRow = table.rowAtPoint(event.point)
+		if (viewRow >= 0 && !table.isRowSelected(viewRow)) {
+			table.setRowSelectionInterval(viewRow, viewRow)
+		}
+		val routes = selectedRoutes()
+		if (routes.isEmpty()) return
+
+		val menu = JPopupMenu()
+
+		// "Override Base" is a native submenu: it opens to the right with a ">" arrow, so the base
+		// dropdown never overlaps or dismisses the context menu.
+		val overrideMenu = JMenu("Override Base")
+		overrideMenu.add(
+			BasePopup.buildList(
+				data = data,
+				firstLabel = "<none>",
+				onFirst = { routes.forEach { it.routeOverride = null }; model.refresh() },
+				onSelectBase = { base -> routes.forEach { it.routeOverride = base }; model.refresh() },
+				onDone = { MenuSelectionManager.defaultManager().clearSelectedPath() },
+			),
+		)
+		menu.add(withMinWidth(overrideMenu))
+		menu.addSeparator()
+		menu.add(sendItem("Send to Repeater", "Ctrl+R") { routes.forEach { sendToRepeater(it) } })
+		menu.add(sendItem("Send to Intruder", "Ctrl+I") { routes.forEach { sendToIntruder(it) } })
+
+		menu.show(table, event.x, event.y)
+	}
+
+	/**
+	 * A menu item with native (gutter-aligned) text and a right-aligned grey shortcut hint.
+	 * The hint is a plain label with no key binding — real shortcuts live on the table later.
+	 */
+	private fun sendItem(name: String, hint: String, action: () -> Unit): JMenuItem {
+		val item = JMenuItem(name)
+		item.layout = BorderLayout()
+		item.add(
+			JLabel(hint).apply {
+				foreground = Color.GRAY
+				border = BorderFactory.createEmptyBorder(0, 0, 0, 2)
+			},
+			BorderLayout.EAST,
+		)
+		item.addActionListener { action() }
+		return withMinWidth(item)
+	}
+
+	/** Gives a menu item a minimum width so the context menu doesn't look cramped. */
+	private fun <T : JMenuItem> withMinWidth(item: T): T {
+		item.preferredSize = Dimension(maxOf(CONTEXT_WIDTH, item.preferredSize.width), item.preferredSize.height)
+		return item
+	}
+
+	private fun selectedRoutes(): List<EndpointRow> =
+		table.selectedRows.map { model.rowAt(table.convertRowIndexToModel(it)) }
+
+	private fun sendToRepeater(row: EndpointRow) {
+		val request = buildRequest(row) ?: return
+		AppContext.api.repeater().sendToRepeater(request, "${row.method} ${row.path}")
+	}
+
+	private fun sendToIntruder(row: EndpointRow) {
+		val request = buildRequest(row) ?: return
+		AppContext.api.intruder().sendToIntruder(request)
+	}
+
+	/** Builds a request from the route's effective base + path; null when no base is known. */
+	private fun buildRequest(row: EndpointRow): HttpRequest? {
+		val base = row.effectiveBase(model.globalOverride) ?: return null
+		return try {
+			HttpRequest.httpRequestFromUrl(base.trimEnd('/') + row.path).withMethod(row.method)
+		} catch (e: Exception) {
+			AppContext.logging.logToError("[SpecDrift] Cannot build request for ${row.method} ${row.path}: ${e.message}")
+			null
+		}
+	}
+
+	companion object {
+		/** Minimum text width (px) of the context menu items, giving the menu a minimum width. */
+		private const val CONTEXT_WIDTH = 200
 	}
 
 	/** Left-aligns the header labels while keeping the look & feel's own renderer. */

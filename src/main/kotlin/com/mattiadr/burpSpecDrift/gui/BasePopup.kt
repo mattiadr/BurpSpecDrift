@@ -9,6 +9,7 @@ import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import java.awt.event.MouseMotionAdapter
 import javax.swing.BorderFactory
+import javax.swing.JComponent
 import javax.swing.JLabel
 import javax.swing.JList
 import javax.swing.JOptionPane
@@ -61,6 +62,22 @@ object BasePopup {
 		onFirst: () -> Unit,
 		onSelectBase: (String) -> Unit,
 	) {
+		val popup = JPopupMenu().apply { layout = BorderLayout() }
+		popup.add(buildList(data, firstLabel, onFirst, onSelectBase) { popup.isVisible = false }, BorderLayout.CENTER)
+		popup.show(invoker, x, y)
+	}
+
+	/**
+	 * Builds the selection list so it can be shown standalone (see [show]) or embedded as the
+	 * popup of a [javax.swing.JMenu]. [onDone] is called after any action to dismiss the host.
+	 */
+	fun buildList(
+		data: SpecTabData,
+		firstLabel: String,
+		onFirst: () -> Unit,
+		onSelectBase: (String) -> Unit,
+		onDone: () -> Unit,
+	): JComponent {
 		val items = buildList {
 			add(First(firstLabel))
 			data.availableBases().sorted().forEach { add(Base(it, data.isCustomBase(it))) }
@@ -76,11 +93,6 @@ object BasePopup {
 		val textWidth = items.maxOf { metrics.stringWidth(textOf(it)) }
 		list.fixedCellWidth = maxOf(MIN_WIDTH, LEFT_MARGIN + textWidth + GAP + X_COL_WIDTH + RIGHT_MARGIN)
 
-		val popup = JPopupMenu().apply {
-			layout = BorderLayout()
-			add(list, BorderLayout.CENTER)
-		}
-
 		// Menu-like hover highlight.
 		list.addMouseMotionListener(object : MouseMotionAdapter() {
 			override fun mouseMoved(e: MouseEvent) {
@@ -94,27 +106,27 @@ object BasePopup {
 				when (val item = items[index]) {
 					is First -> {
 						onFirst()
-						popup.isVisible = false
+						onDone()
 					}
 					is Base -> {
 						val bounds = list.getCellBounds(index, index)
 						if (item.removable && bounds != null && e.x >= bounds.x + bounds.width - HIT_ZONE) {
-							popup.isVisible = false
+							onDone()
 							data.removeCustomBase(item.url)
 						} else {
 							onSelectBase(item.url)
-							popup.isVisible = false
+							onDone()
 						}
 					}
 					Add -> {
-						popup.isVisible = false
-						promptAdd(invoker, data, onSelectBase)
+						promptAdd(list, data, onSelectBase)
+						onDone()
 					}
 				}
 			}
 		})
 
-		popup.show(invoker, x, y)
+		return list
 	}
 
 	private fun promptAdd(invoker: Component, data: SpecTabData, onSelectBase: (String) -> Unit) {
