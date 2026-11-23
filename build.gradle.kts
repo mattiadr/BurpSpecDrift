@@ -16,10 +16,18 @@ dependencies {
 	compileOnly("net.portswigger.burp.extensions:montoya-api:2026.7")
 	implementation("io.swagger.parser.v3:swagger-parser:2.1.22")
 	implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0")
+
+	testImplementation(kotlin("test"))
+	testImplementation("org.junit.jupiter:junit-jupiter:5.11.3")
+	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 kotlin {
 	jvmToolchain(21)
+}
+
+tasks.test {
+	useJUnitPlatform()
 }
 
 tasks {

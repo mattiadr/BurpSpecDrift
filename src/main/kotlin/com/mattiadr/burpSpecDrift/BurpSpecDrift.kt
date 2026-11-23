@@ -9,6 +9,8 @@ import burp.api.montoya.ui.menu.MenuItem
 import com.mattiadr.burpSpecDrift.core.AppContext
 import com.mattiadr.burpSpecDrift.gui.SpecDriftContextMenu
 import com.mattiadr.burpSpecDrift.gui.SpecDriftTab
+import java.awt.Toolkit
+import java.awt.datatransfer.StringSelection
 
 @Suppress("unused")
 class BurpSpecDrift : BurpExtension {
@@ -27,6 +29,11 @@ class BurpSpecDrift : BurpExtension {
 				val logging = api.logging()
 				logging.logToOutput("=== SpecDrift persisted extensionData ===")
 				dumpPersisted(api.persistence().extensionData(), logging, "")
+			},
+			MenuItem.basicMenuItem("Copy Hits to Clipboard").withAction {
+				val report = tab.hitsReport()
+				Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(report), null)
+				api.logging().logToOutput("[SpecDrift] Copied hit counts to clipboard:\n$report")
 			}))
 	}
 
