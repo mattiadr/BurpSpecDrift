@@ -60,6 +60,20 @@ class TrafficTracker(private val tabsProvider: () -> List<SpecTabData>) {
 		executor.submit { compiledByTab.remove(tab.id) }
 	}
 
+	/**
+	 * Resets one tab's proxy hits to zero and recomputes them from the proxy history with the tab's
+	 * current (possibly overridden) bases. Repeater/Other counts are untouched. Useful after a base
+	 * change, since overrides only affect future live matching.
+	 */
+	fun recalculateProxyHits(tab: SpecTabData) {
+		executor.submit {
+			tab.importedSpec?.endpoints?.forEach { it.proxyHits = 0 }
+			tab.lastProxyId = 0
+			backfill()
+			onCountsChanged?.invoke() // ensure the cleared counts repaint even if nothing matched
+		}
+	}
+
 	/** On unload: pin each tab's offset to the exact current max id, correcting any derived drift. */
 	fun onUnload() {
 		runCatching {

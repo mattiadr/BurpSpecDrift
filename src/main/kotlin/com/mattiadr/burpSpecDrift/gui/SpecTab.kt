@@ -43,10 +43,16 @@ class SpecTab(val data: SpecTabData) {
 	/** Invoked on the EDT after a successful load, so the owner can refresh tab decorations. */
 	var onSpecLoaded: (() -> Unit)? = null
 
+	/** Invoked when the user asks to reset and recompute this tab's proxy hit counts. */
+	var onRecalcProxyHits: (() -> Unit)? = null
+
 	private val urlField = HintTextField(40)
 	private val loadUrlButton = JButton("Load from URL")
 	private val loadFileButton = JButton("Load from File")
 	private val baseOverrideButton = JButton("<none>")
+	private val recalcButton = JButton("Recalc Proxy Hits").apply {
+		toolTipText = "Reset and recompute proxy hits from the proxy history"
+	}
 	private val searchField = HintTextField(20).apply { hint = "Search path" }
 
 	/** Toggle state for the global base-override dropdown, so re-clicking the button closes it. */
@@ -84,6 +90,7 @@ class SpecTab(val data: SpecTabData) {
 		loadUrlButton.addActionListener { onLoadUrl() }
 		loadFileButton.addActionListener { onLoadFile() }
 		baseOverrideButton.addActionListener { openBaseOverridePopup() }
+		recalcButton.addActionListener { onRecalcClicked() }
 		configureBaseOverrideButton()
 		capWidthToPreferred(urlField)
 		capWidthToPreferred(searchField)
@@ -138,6 +145,25 @@ class SpecTab(val data: SpecTabData) {
 		baseOverrideToggle.track(popup, Unit)
 	}
 
+	/** Confirms, then asks the owner to reset and recompute this tab's proxy hits. */
+	private fun onRecalcClicked() {
+		if (!data.hasLoadedSpec) return
+		val options = arrayOf("Recalculate", "Cancel")
+		val choice = JOptionPane.showOptionDialog(
+			component,
+			"Reset this tab's Proxy Hits to zero and recompute them from Burp's proxy history, " +
+				"using the current base settings.\n\n" +
+				"Useful after changing a base override. Repeater and Other hits are not affected.",
+			"Recalculate proxy hits",
+			JOptionPane.OK_CANCEL_OPTION,
+			JOptionPane.QUESTION_MESSAGE,
+			null,
+			options,
+			options[0],
+		)
+		if (choice == JOptionPane.OK_OPTION) onRecalcProxyHits?.invoke()
+	}
+
 	private fun applyGlobalOverride(value: String?) {
 		data.baseOverride = value
 		updateBaseOverrideButton()
@@ -160,6 +186,8 @@ class SpecTab(val data: SpecTabData) {
 		add(Box.createHorizontalStrut(24))
 		add(JLabel("Base Override: "))
 		add(baseOverrideButton)
+		add(Box.createHorizontalStrut(4))
+		add(recalcButton)
 		add(Box.createHorizontalGlue())
 		add(JLabel("Search: "))
 		add(searchField)

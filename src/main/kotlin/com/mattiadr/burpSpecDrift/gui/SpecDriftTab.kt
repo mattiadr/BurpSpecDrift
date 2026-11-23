@@ -183,6 +183,7 @@ class SpecDriftTab {
 				// The spec changed: re-scan the proxy history to backfill this tab's counts.
 				tracker.onSpecLoaded()
 			}
+			specTab.onRecalcProxyHits = { tracker.recalculateProxyHits(data) }
 			data.onChanged = { persistence.saveTab(data) }
 
 			tabbedPane.selectedIndex = insertIndex
