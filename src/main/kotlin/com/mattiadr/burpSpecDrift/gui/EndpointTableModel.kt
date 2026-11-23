@@ -30,6 +30,9 @@ class EndpointTableModel : AbstractTableModel() {
 
 	fun rowAt(modelIndex: Int): EndpointRow = rows[modelIndex]
 
+	/** All backing rows (unfiltered, in model order). */
+	fun allRows(): List<EndpointRow> = rows
+
 	override fun getRowCount(): Int = rows.size
 
 	override fun getColumnCount(): Int = COLUMNS.size

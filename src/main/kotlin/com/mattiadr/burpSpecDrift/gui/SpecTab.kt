@@ -16,6 +16,8 @@ import java.awt.Dimension
 import java.awt.event.ComponentAdapter
 import java.awt.event.ComponentEvent
 import java.io.File
+import javax.swing.event.DocumentEvent
+import javax.swing.event.DocumentListener
 import javax.swing.Box
 import javax.swing.BorderFactory
 import javax.swing.BoxLayout
@@ -45,6 +47,10 @@ class SpecTab(val data: SpecTabData) {
 	private val loadUrlButton = JButton("Load from URL")
 	private val loadFileButton = JButton("Load from File")
 	private val baseOverrideButton = JButton("<none>")
+	private val searchField = HintTextField(20).apply { hint = "Search path" }
+
+	/** Toggle state for the global base-override dropdown, so re-clicking the button closes it. */
+	private val baseOverrideToggle = PopupToggle<Unit>()
 
 	private val tablePanel = EndpointTablePanel(data)
 	private val detailArea = JTextArea(6, 60).apply {
@@ -80,6 +86,12 @@ class SpecTab(val data: SpecTabData) {
 		baseOverrideButton.addActionListener { openBaseOverridePopup() }
 		configureBaseOverrideButton()
 		capWidthToPreferred(urlField)
+		capWidthToPreferred(searchField)
+		searchField.document.addDocumentListener(object : DocumentListener {
+			override fun insertUpdate(e: DocumentEvent) = tablePanel.setPathSearch(searchField.text)
+			override fun removeUpdate(e: DocumentEvent) = tablePanel.setPathSearch(searchField.text)
+			override fun changedUpdate(e: DocumentEvent) = tablePanel.setPathSearch(searchField.text)
+		})
 		tablePanel.onRowSelected = { row -> showDetail(row) }
 		data.onBasesChanged = { onBasesChanged() }
 		detailArea.text = summaryText
@@ -110,9 +122,11 @@ class SpecTab(val data: SpecTabData) {
 			if (override == null) Color.GRAY else UIManager.getColor("Button.foreground")
 	}
 
-	/** Opens the shared base dropdown anchored below the button (tab-level override). */
+	/** Opens the shared base dropdown anchored below the button (tab-level override). Clicking the
+	 * button again while it is open closes it (see [baseOverrideToggle]). */
 	private fun openBaseOverridePopup() {
-		BasePopup.show(
+		if (!baseOverrideToggle.requestOpen(Unit)) return
+		val popup = BasePopup.show(
 			invoker = baseOverrideButton,
 			x = 0,
 			y = baseOverrideButton.height,
@@ -121,6 +135,7 @@ class SpecTab(val data: SpecTabData) {
 			onFirst = { applyGlobalOverride(null) },
 			onSelectBase = { applyGlobalOverride(it) },
 		)
+		baseOverrideToggle.track(popup, Unit)
 	}
 
 	private fun applyGlobalOverride(value: String?) {
@@ -146,6 +161,8 @@ class SpecTab(val data: SpecTabData) {
 		add(JLabel("Base Override: "))
 		add(baseOverrideButton)
 		add(Box.createHorizontalGlue())
+		add(JLabel("Search: "))
+		add(searchField)
 	}
 
 	private fun onLoadUrl() {
@@ -214,6 +231,7 @@ class SpecTab(val data: SpecTabData) {
 	}
 
 	private fun renderResult(source: String, result: OpenApiParseResult) {
+		searchField.text = ""
 		val api = result.openAPI
 		if (api != null) {
 			val imported = OpenApiImporter.extract(api)

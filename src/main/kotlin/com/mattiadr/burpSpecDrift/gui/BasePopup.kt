@@ -61,10 +61,11 @@ object BasePopup {
 		firstLabel: String,
 		onFirst: () -> Unit,
 		onSelectBase: (String) -> Unit,
-	) {
+	): JPopupMenu {
 		val popup = JPopupMenu().apply { layout = BorderLayout() }
 		popup.add(buildList(data, firstLabel, onFirst, onSelectBase) { popup.isVisible = false }, BorderLayout.CENTER)
 		popup.show(invoker, x, y)
+		return popup
 	}
 
 	/**
