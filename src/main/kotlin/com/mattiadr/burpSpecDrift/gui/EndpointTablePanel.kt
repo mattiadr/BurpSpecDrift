@@ -198,6 +198,11 @@ class EndpointTablePanel(private val data: SpecTabData) {
 		model.globalOverride = value
 	}
 
+	/** Repaints the hit cells to reflect updated counters (keeps selection; no model reset). */
+	fun refreshHits() {
+		table.repaint()
+	}
+
 	/** True when [modelColumn] currently constrains the view (drives the funnel's filled state). */
 	private fun isColumnFiltered(modelColumn: Int): Boolean = when (modelColumn) {
 		EndpointTableModel.COL_METHOD -> activeFilter.methods.isNotEmpty()

@@ -32,6 +32,13 @@ class SpecTabData(
 
 	val hasLoadedSpec: Boolean get() = importedSpec != null
 
+	/**
+	 * How far into the proxy history this tab has already counted. Mutated only on the traffic
+	 * tracker's single thread; read on the EDT when persisting. See docs/hit-counting.md.
+	 */
+	@Volatile
+	var lastProxyId: Int = 0
+
 	/** Bases declared by the spec (across root/path/operation servers), rebuilt on each load. */
 	private val specBases = linkedSetOf<String>()
 
@@ -89,6 +96,8 @@ class SpecTabData(
 	fun onSpecLoaded(imported: ImportedSpec, source: String) {
 		this.importedSpec = imported
 		this.source = source
+		// New endpoints start with zero counts, so re-scan the whole proxy history for this tab.
+		this.lastProxyId = 0
 		rebuildSpecBases()
 	}
 
@@ -111,6 +120,7 @@ class SpecTabData(
 		baseOverride = _baseOverride,
 		customBases = customBasesList(),
 		spec = importedSpec,
+		lastProxyId = lastProxyId,
 	)
 
 	private fun rebuildSpecBases() {
@@ -128,6 +138,7 @@ class SpecTabData(
 			source = persisted.source
 			_baseOverride = persisted.baseOverride
 			customBases.addAll(persisted.customBases)
+			lastProxyId = persisted.lastProxyId
 			persisted.spec?.let {
 				importedSpec = it
 				rebuildSpecBases()

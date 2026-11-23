@@ -4,16 +4,19 @@ import com.mattiadr.burpSpecDrift.core.AppContext
 import com.mattiadr.burpSpecDrift.model.SpecDriftModel
 import com.mattiadr.burpSpecDrift.model.SpecTabData
 import com.mattiadr.burpSpecDrift.persistence.SpecDriftPersistence
+import com.mattiadr.burpSpecDrift.runtime.TrafficTracker
 import java.awt.Component
 import java.awt.Font
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.swing.BorderFactory
 import javax.swing.JComponent
 import javax.swing.JLabel
 import javax.swing.JOptionPane
 import javax.swing.JPanel
 import javax.swing.JTabbedPane
+import javax.swing.SwingUtilities
 import javax.swing.Timer
 
 /**
@@ -25,6 +28,7 @@ class SpecDriftTab {
 
 	private val model = SpecDriftModel()
 	private val persistence = SpecDriftPersistence()
+	private val tracker = TrafficTracker { model.tabs }
 
 	private val tabbedPane = JTabbedPane()
 	private val plusPanel = JPanel()
@@ -35,11 +39,32 @@ class SpecDriftTab {
 	/** Guards against the "+" tab reacting while we programmatically add/select/remove tabs. */
 	private var adjusting = false
 
-	/** Set by the (future) proxy handler when hit counts change, flushed by the timer. */
+	/** Set by the traffic tracker when hit counts change, flushed by the timer. */
 	@Volatile
 	private var hitsDirty = false
 
+	/** Coalesces repaint requests so a burst of counted requests triggers one EDT repaint. */
+	private val repaintScheduled = AtomicBoolean(false)
+
 	val component: JComponent get() = tabbedPane
+
+	/**
+	 * A tab-separated dump of the current hit counters, one line per route, for test/debug: paste it
+	 * and compare against scripts/hit_counting_test.py. Columns: method, path, proxy, repeater, other.
+	 */
+	fun hitsReport(): String {
+		val sb = StringBuilder("method\tpath\tproxy\trepeater\tother\ttab\n")
+		model.tabs.forEach { tab ->
+			tab.endpoints
+				.sortedWith(compareBy({ it.method }, { it.path }))
+				.forEach { row ->
+					sb.append(row.method).append('\t').append(row.path).append('\t')
+						.append(row.proxyHits).append('\t').append(row.repeaterHits).append('\t')
+						.append(row.otherHits).append('\t').append(tab.name).append('\n')
+				}
+		}
+		return sb.toString()
+	}
 
 	init {
 		tabbedPane.addTab("+", plusPanel)
@@ -52,6 +77,18 @@ class SpecDriftTab {
 		}
 		restoreTabs()
 		startHitsFlush()
+		tracker.onCountsChanged = { onCountsChanged() }
+		tracker.start()
+	}
+
+	/** Off-EDT callback from the tracker: mark counts dirty for persistence and repaint (coalesced). */
+	private fun onCountsChanged() {
+		hitsDirty = true
+		if (repaintScheduled.getAndSet(true)) return
+		SwingUtilities.invokeLater {
+			repaintScheduled.set(false)
+			tabsByComponent.values.forEach { it.refreshHits() }
+		}
 	}
 
 	/** Restores persisted tabs, or creates an initial empty tab when there is nothing to restore. */
@@ -73,7 +110,11 @@ class SpecDriftTab {
 	/** Periodically (and on unload) persists hit counts, only when they changed. */
 	private fun startHitsFlush() {
 		Timer(HITS_FLUSH_MS) { flushHits() }.apply { isRepeats = true }.start()
-		AppContext.api.extension().registerUnloadingHandler { flushHits() }
+		AppContext.api.extension().registerUnloadingHandler {
+			// Pin exact proxy offsets first, then persist counts + offsets as one consistent snapshot.
+			tracker.onUnload()
+			model.tabs.forEach { persistence.saveTab(it) }
+		}
 	}
 
 	private fun flushHits() {
@@ -139,6 +180,8 @@ class SpecDriftTab {
 			specTab.onSpecLoaded = {
 				title.refreshFromData()
 				persistence.saveTab(data)
+				// The spec changed: re-scan the proxy history to backfill this tab's counts.
+				tracker.onSpecLoaded()
 			}
 			data.onChanged = { persistence.saveTab(data) }
 
@@ -172,6 +215,7 @@ class SpecDriftTab {
 		adjusting = true
 		try {
 			tabsByComponent.remove(specTab.component)
+			tracker.onTabRemoved(specTab.data)
 			model.remove(specTab.data)
 			persistence.removeTab(specTab.data)
 			tabbedPane.removeTabAt(idx)

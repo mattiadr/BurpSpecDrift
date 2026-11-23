@@ -24,4 +24,6 @@ data class PersistedTab(
 	val baseOverride: String? = null,
 	val customBases: List<String> = emptyList(),
 	val spec: ImportedSpec? = null,
+	/** How far into the proxy history this tab has already counted (see docs/hit-counting.md). */
+	val lastProxyId: Int = 0,
 )

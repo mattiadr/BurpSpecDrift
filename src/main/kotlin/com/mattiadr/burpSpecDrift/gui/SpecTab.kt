@@ -187,6 +187,11 @@ class SpecTab(val data: SpecTabData) {
 		}
 	}
 
+	/** Repaints the hit columns after the traffic tracker updated the counters. */
+	fun refreshHits() {
+		tablePanel.refreshHits()
+	}
+
 	/** Loads a spec from already-retrieved content (e.g. a response body sent from Burp). */
 	fun loadFromString(content: String) {
 		loadAsync("Sent from Burp") { OpenApiParser.parseContent(content) }
