@@ -36,7 +36,10 @@ class EndpointTableModel : AbstractTableModel() {
 
 	override fun getColumnName(column: Int): String = COLUMNS[column]
 
-	override fun getColumnClass(column: Int): Class<*> = String::class.java
+	override fun getColumnClass(column: Int): Class<*> = when (column) {
+		COL_PROXY_HITS, COL_REPEATER_HITS, COL_OTHER_HITS -> Integer::class.java
+		else -> String::class.java
+	}
 
 	override fun isCellEditable(rowIndex: Int, columnIndex: Int): Boolean = false
 
@@ -46,6 +49,10 @@ class EndpointTableModel : AbstractTableModel() {
 			COL_BASE -> row.effectiveBase(globalOverride)
 			COL_METHOD -> row.method
 			COL_PATH -> row.path
+			COL_AUTH -> row.security.joinToString(", ")
+			COL_PROXY_HITS -> row.proxyHits
+			COL_REPEATER_HITS -> row.repeaterHits
+			COL_OTHER_HITS -> row.otherHits
 			else -> null
 		}
 	}
@@ -54,6 +61,10 @@ class EndpointTableModel : AbstractTableModel() {
 		const val COL_BASE = 0
 		const val COL_METHOD = 1
 		const val COL_PATH = 2
-		private val COLUMNS = arrayOf("Base", "Method", "Path")
+		const val COL_AUTH = 3
+		const val COL_PROXY_HITS = 4
+		const val COL_REPEATER_HITS = 5
+		const val COL_OTHER_HITS = 6
+		private val COLUMNS = arrayOf("Base", "Method", "Path", "Auth", "Proxy Hits", "Repeater Hits", "Other Hits")
 	}
 }

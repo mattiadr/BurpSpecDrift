@@ -13,6 +13,8 @@ import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.Component
 import java.awt.Dimension
+import java.awt.event.ComponentAdapter
+import java.awt.event.ComponentEvent
 import java.io.File
 import javax.swing.Box
 import javax.swing.BorderFactory
@@ -58,7 +60,17 @@ class SpecTab(val data: SpecTabData) {
 			JSplitPane.VERTICAL_SPLIT,
 			tablePanel.component,
 			JScrollPane(detailArea),
-		).apply { resizeWeight = 0.7 }
+		).apply {
+			resizeWeight = 0.5
+			// Place the divider at 50% once the split pane first gets a real size (a fractional
+			// divider location can't be set before that), then let the user drag it freely.
+			addComponentListener(object : ComponentAdapter() {
+				override fun componentResized(event: ComponentEvent) {
+					setDividerLocation(0.5)
+					removeComponentListener(this)
+				}
+			})
+		}
 		add(split, BorderLayout.CENTER)
 	}
 

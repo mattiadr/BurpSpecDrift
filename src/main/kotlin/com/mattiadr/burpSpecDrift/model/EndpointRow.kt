@@ -40,8 +40,12 @@ class EndpointRow(
 	val responses: List<ResponseInfo> = emptyList(),
 	/** This route's own base override, or null to fall back to the global/spec base. */
 	var routeOverride: String? = null,
-	/** How many matching requests were seen in the proxy. Populated by the diff later. */
-	var hits: Int = 0,
+	/** Matching requests seen in the proxy. Populated by the diff later. */
+	var proxyHits: Int = 0,
+	/** Matching requests sent from Repeater. Populated by the diff later. */
+	var repeaterHits: Int = 0,
+	/** Matching requests seen from any other Burp tool. Populated by the diff later. */
+	var otherHits: Int = 0,
 ) {
 	/** Stable identity of this route within a spec (unique: paths and methods don't repeat). */
 	fun key(): String = "$method $path"

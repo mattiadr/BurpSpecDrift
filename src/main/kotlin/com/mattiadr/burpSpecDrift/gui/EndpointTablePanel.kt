@@ -11,6 +11,8 @@ import java.awt.Component
 import java.awt.Dimension
 import java.awt.Font
 import java.awt.event.ActionEvent
+import java.awt.event.ComponentAdapter
+import java.awt.event.ComponentEvent
 import java.awt.event.InputEvent
 import java.awt.event.KeyEvent
 import java.awt.event.MouseAdapter
@@ -43,17 +45,38 @@ class EndpointTablePanel(private val data: SpecTabData) {
 	private val table = JTable(model).apply {
 		autoCreateRowSorter = true
 		setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION)
-		autoResizeMode = JTable.AUTO_RESIZE_LAST_COLUMN
+		// Auto-resize is off so every column stays freely draggable; we instead stretch the Path
+		// column by hand (see stretchPathColumn) so all the leftover width goes there alone.
+		autoResizeMode = JTable.AUTO_RESIZE_OFF
 		fillsViewportHeight = true
 		columnModel.getColumn(EndpointTableModel.COL_BASE).apply {
 			cellRenderer = BaseRenderer()
 			minWidth = 150
-			width = 300
 			preferredWidth = 300
 		}
 		columnModel.getColumn(EndpointTableModel.COL_METHOD).apply {
 			minWidth = 50
 			preferredWidth = 70
+		}
+		columnModel.getColumn(EndpointTableModel.COL_PATH).apply {
+			minWidth = 150
+			preferredWidth = 400
+		}
+		columnModel.getColumn(EndpointTableModel.COL_AUTH).apply {
+			minWidth = 60
+			preferredWidth = 120
+		}
+		val hitsRenderer = numericRenderer()
+		for (col in intArrayOf(
+			EndpointTableModel.COL_PROXY_HITS,
+			EndpointTableModel.COL_REPEATER_HITS,
+			EndpointTableModel.COL_OTHER_HITS,
+		)) {
+			columnModel.getColumn(col).apply {
+				cellRenderer = hitsRenderer
+				minWidth = 50
+				preferredWidth = 90
+			}
 		}
 		leftAlignHeader()
 	}
@@ -92,6 +115,33 @@ class EndpointTablePanel(private val data: SpecTabData) {
 			}
 		})
 		installShortcuts()
+		// Keep Path filling the leftover viewport width as the table/window is resized.
+		component.viewport.addComponentListener(object : ComponentAdapter() {
+			override fun componentResized(event: ComponentEvent) = stretchPathColumn()
+		})
+		SwingUtilities.invokeLater { stretchPathColumn() }
+	}
+
+	/**
+	 * Widens (or shrinks) the Path column so the visible columns exactly fill the viewport, giving
+	 * all the slack to Path alone. Every column stays user-resizable (auto-resize is off); when the
+	 * other columns already overflow the viewport, Path falls back to its minimum and a horizontal
+	 * scrollbar appears.
+	 */
+	private fun stretchPathColumn() {
+		val viewportWidth = component.viewport.width
+		if (viewportWidth <= 0) return
+		val columns = table.columnModel
+		val pathColumn = columns.getColumn(EndpointTableModel.COL_PATH)
+		var othersWidth = 0
+		for (i in 0 until columns.columnCount) {
+			if (i != EndpointTableModel.COL_PATH) othersWidth += columns.getColumn(i).width
+		}
+		val target = maxOf(pathColumn.minWidth, viewportWidth - othersWidth)
+		if (pathColumn.width != target) {
+			pathColumn.preferredWidth = target
+			pathColumn.width = target
+		}
 	}
 
 	/** Ctrl+R / Ctrl+I send every selected route to Repeater / Intruder. */
@@ -225,6 +275,11 @@ class EndpointTablePanel(private val data: SpecTabData) {
 	companion object {
 		/** Minimum text width (px) of the context menu items, giving the menu a minimum width. */
 		private const val CONTEXT_WIDTH = 200
+	}
+
+	/** Left-aligned renderer for the numeric hit columns (overrides the default right alignment). */
+	private fun numericRenderer(): DefaultTableCellRenderer = DefaultTableCellRenderer().apply {
+		horizontalAlignment = SwingConstants.LEFT
 	}
 
 	/** Left-aligns the header labels while keeping the look & feel's own renderer. */
