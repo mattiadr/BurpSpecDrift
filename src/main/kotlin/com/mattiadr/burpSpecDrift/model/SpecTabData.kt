@@ -1,12 +1,11 @@
 package com.mattiadr.burpSpecDrift.model
 
-import io.swagger.v3.oas.models.OpenAPI
 import java.util.UUID
 
 /**
- * Live data for a single SpecDrift tab, kept out of the GUI so it can be persisted via Burp's
- * persistence API. Persistence saves the resolved spec text plus the overrides and hit counts,
- * keyed by [EndpointRow.key]; the spec is re-parsed on restore.
+ * Live data for a single SpecDrift tab. Persistence stores the parsed rows directly (as an
+ * [ImportedSpec], with overrides and hit counts inline on each [EndpointRow]) plus the tab
+ * metadata — see [toPersisted] / [fromPersisted]. No raw spec text is kept.
  */
 class SpecTabData(
 	val defaultName: String,
@@ -15,32 +14,23 @@ class SpecTabData(
 	/** Name set manually by the user; highest priority. */
 	private var userName: String? = null
 
-	/** Title taken from the loaded spec; used when the user has not set a name. */
-	private var specTitle: String? = null
-
-	/** The displayed tab name, by priority: user > spec > default number. */
-	val name: String get() = userName ?: specTitle ?: defaultName
+	/** The displayed tab name, by priority: user > spec title > default number. */
+	val name: String get() = userName ?: importedSpec?.title ?: defaultName
 
 	/** The user-set name, or null — exposed for persistence. */
 	val userNameValue: String? get() = userName
 
-	/** The parsed spec, or null while nothing has been loaded yet. */
-	var openAPI: OpenAPI? = null
-		private set
-
-	/** The resolved spec serialized as text, persisted and re-parsed on restore. */
-	var specText: String? = null
-		private set
-
-	/** The flattened endpoints of [openAPI], or empty while nothing has been loaded. */
-	var endpoints: List<EndpointRow> = emptyList()
+	/** The imported spec (info + endpoints), or null while nothing has been loaded. */
+	var importedSpec: ImportedSpec? = null
 		private set
 
 	/** Where the spec came from (file path, URL, or "Sent from Burp"); null until loaded. */
 	var source: String? = null
 		private set
 
-	val hasLoadedSpec: Boolean get() = openAPI != null
+	val endpoints: List<EndpointRow> get() = importedSpec?.endpoints ?: emptyList()
+
+	val hasLoadedSpec: Boolean get() = importedSpec != null
 
 	/** Bases declared by the spec (across root/path/operation servers), rebuilt on each load. */
 	private val specBases = linkedSetOf<String>()
@@ -63,7 +53,7 @@ class SpecTabData(
 	/** Invoked whenever the available base list changes, so every view can refresh. */
 	var onBasesChanged: (() -> Unit)? = null
 
-	/** Invoked whenever persistent state (overrides, names, bases) changes, to trigger a save. */
+	/** Invoked whenever persistent state changes, to trigger a save. */
 	var onChanged: (() -> Unit)? = null
 
 	/** All bases available for override: spec-declared plus user-added, de-duplicated. */
@@ -90,46 +80,38 @@ class SpecTabData(
 		onChanged?.invoke()
 	}
 
-	/** Per-route overrides, keyed by route, for persistence. */
-	fun routeOverrides(): Map<String, String> =
-		endpoints.filter { it.routeOverride != null }.associate { it.key() to it.routeOverride!! }
-
-	/** Per-route hit counts, keyed by route, for persistence. */
-	fun routeHits(): Map<String, Int> =
-		endpoints.filter { it.hits > 0 }.associate { it.key() to it.hits }
-
 	/** Called by views after changing a per-route override, to trigger a save. */
 	fun notifyChanged() {
 		onChanged?.invoke()
 	}
 
-	/**
-	 * Records a successfully parsed spec: stores it (and its serialized [specText]), extracts
-	 * endpoints, and names the tab. Resets per-route state, which is invalidated by a new spec.
-	 */
-	fun onSpecLoaded(openAPI: OpenAPI, source: String, specText: String) {
-		this.openAPI = openAPI
+	/** Records a successfully imported spec (replacing any previous one) and names the tab. */
+	fun onSpecLoaded(imported: ImportedSpec, source: String) {
+		this.importedSpec = imported
 		this.source = source
-		this.specText = specText
-		this.endpoints = EndpointExtractor.extract(openAPI)
 		rebuildSpecBases()
-		openAPI.info?.title?.takeIf { it.isNotBlank() }?.let { specTitle = it }
 	}
 
-	/** Restores persisted meta (before wiring callbacks); does not fire change events. */
-	fun restoreMeta(userName: String?, baseOverride: String?, customBases: List<String>) {
-		this.userName = userName
-		this._baseOverride = baseOverride
-		this.customBases.addAll(customBases)
-	}
-
-	/** Re-applies persisted per-route overrides and hit counts after the spec has been loaded. */
-	fun applyRouteState(overrides: Map<String, String>, hits: Map<String, Int>) {
-		endpoints.forEach { row ->
-			overrides[row.key()]?.let { row.routeOverride = it }
-			hits[row.key()]?.let { row.hits = it }
+	/**
+	 * Applies a user edit. Ignored when the text is blank or unchanged from the current displayed
+	 * name, so double-clicking without really changing it does not count as user-set.
+	 */
+	fun renameByUser(newName: String) {
+		if (newName.isNotBlank() && newName != name) {
+			userName = newName
+			onChanged?.invoke()
 		}
 	}
+
+	fun toPersisted(): PersistedTab = PersistedTab(
+		id = id,
+		defaultName = defaultName,
+		userName = userName,
+		source = source,
+		baseOverride = _baseOverride,
+		customBases = customBasesList(),
+		spec = importedSpec,
+	)
 
 	private fun rebuildSpecBases() {
 		specBases.clear()
@@ -139,14 +121,17 @@ class SpecTabData(
 		}
 	}
 
-	/**
-	 * Applies a user edit. Ignored when the text is blank or unchanged from the current
-	 * displayed name, so double-clicking without really changing it does not count as user-set.
-	 */
-	fun renameByUser(newName: String) {
-		if (newName.isNotBlank() && newName != name) {
-			userName = newName
-			onChanged?.invoke()
+	companion object {
+		/** Rebuilds a tab from its persisted form (no re-parse: rows are stored directly). */
+		fun fromPersisted(persisted: PersistedTab): SpecTabData = SpecTabData(persisted.defaultName, persisted.id).apply {
+			userName = persisted.userName
+			source = persisted.source
+			_baseOverride = persisted.baseOverride
+			customBases.addAll(persisted.customBases)
+			persisted.spec?.let {
+				importedSpec = it
+				rebuildSpecBases()
+			}
 		}
 	}
 }

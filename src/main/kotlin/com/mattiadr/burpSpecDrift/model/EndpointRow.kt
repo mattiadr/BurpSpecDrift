@@ -1,5 +1,7 @@
 package com.mattiadr.burpSpecDrift.model
 
+import kotlinx.serialization.Serializable
+
 /** Which source the effective base of a route comes from (drives the cell styling). */
 enum class BaseSource {
 	/** No base at all: not declared by the spec and no override. */
@@ -21,6 +23,7 @@ enum class BaseSource {
  * applies to this operation (operation → path → root precedence), or null when the
  * spec declares no server. The effective base layers overrides on top: route > global > spec.
  */
+@Serializable
 class EndpointRow(
 	val method: String,
 	val path: String,
@@ -28,14 +31,18 @@ class EndpointRow(
 	val alternativeBases: List<String> = emptyList(),
 	val operationId: String? = null,
 	val summary: String? = null,
+	val description: String? = null,
 	val tags: List<String> = emptyList(),
-) {
-	/** How many matching requests were seen in the proxy. Populated by the diff later. */
-	var hits: Int = 0
-
+	val deprecated: Boolean = false,
+	val security: List<String> = emptyList(),
+	val parameters: List<Param> = emptyList(),
+	val requestBody: Body? = null,
+	val responses: List<ResponseInfo> = emptyList(),
 	/** This route's own base override, or null to fall back to the global/spec base. */
-	var routeOverride: String? = null
-
+	var routeOverride: String? = null,
+	/** How many matching requests were seen in the proxy. Populated by the diff later. */
+	var hits: Int = 0,
+) {
 	/** Stable identity of this route within a spec (unique: paths and methods don't repeat). */
 	fun key(): String = "$method $path"
 

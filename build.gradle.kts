@@ -1,5 +1,6 @@
 plugins {
 	kotlin("jvm") version "2.4.10"
+	kotlin("plugin.serialization") version "2.4.10"
 	id("com.gradleup.shadow") version "9.4.1"
 }
 
@@ -14,6 +15,7 @@ dependencies {
 	implementation(kotlin("stdlib"))
 	compileOnly("net.portswigger.burp.extensions:montoya-api:2026.7")
 	implementation("io.swagger.parser.v3:swagger-parser:2.1.22")
+	implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0")
 }
 
 kotlin {

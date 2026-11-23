@@ -79,7 +79,7 @@ class SpecDriftTab {
 	private fun flushHits() {
 		if (!hitsDirty) return
 		hitsDirty = false
-		model.tabs.forEach { persistence.saveHits(it) }
+		model.tabs.forEach { persistence.saveTab(it) }
 	}
 
 	/** Shows the close button only on the currently selected tab. */
@@ -120,7 +120,7 @@ class SpecDriftTab {
 	private fun addSpecTab(): SpecTab {
 		val data = model.newTab()
 		val specTab = installTab(data)
-		persistence.saveTab(data, includeSpec = false)
+		persistence.saveTab(data)
 		persistence.saveOrder(model.tabs)
 		return specTab
 	}
@@ -138,9 +138,9 @@ class SpecDriftTab {
 			tabbedPane.setTabComponentAt(insertIndex, title)
 			specTab.onSpecLoaded = {
 				title.refreshFromData()
-				persistence.saveTab(data, includeSpec = true)
+				persistence.saveTab(data)
 			}
-			data.onChanged = { persistence.saveTab(data, includeSpec = false) }
+			data.onChanged = { persistence.saveTab(data) }
 
 			tabbedPane.selectedIndex = insertIndex
 			updateCloseButtons()

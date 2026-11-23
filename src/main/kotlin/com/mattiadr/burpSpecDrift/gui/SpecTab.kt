@@ -1,11 +1,14 @@
 package com.mattiadr.burpSpecDrift.gui
 
 import com.mattiadr.burpSpecDrift.core.AppContext
+import com.mattiadr.burpSpecDrift.model.ContentExample
+import com.mattiadr.burpSpecDrift.model.EndpointExtractor
 import com.mattiadr.burpSpecDrift.model.EndpointRow
+import com.mattiadr.burpSpecDrift.model.ImportedSpec
+import com.mattiadr.burpSpecDrift.model.Param
 import com.mattiadr.burpSpecDrift.model.SpecTabData
 import com.mattiadr.burpSpecDrift.spec.SpecParseResult
 import com.mattiadr.burpSpecDrift.spec.SpecParser
-import io.swagger.v3.oas.models.OpenAPI
 import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.Component
@@ -201,15 +204,16 @@ class SpecTab(val data: SpecTabData) {
 	private fun renderResult(source: String, result: SpecParseResult) {
 		val api = result.openAPI
 		if (api != null) {
-			data.onSpecLoaded(api, source, SpecParser.toJson(api))
+			val imported = EndpointExtractor.extract(api)
+			data.onSpecLoaded(imported, source)
 			tablePanel.setRows(data.endpoints)
 			tablePanel.setGlobalOverride(data.baseOverride)
 			updateBaseOverrideButton()
+			setSummary(buildSummary(source, imported, result.messages))
 		} else {
 			tablePanel.setRows(emptyList())
+			setSummary(buildSummary(source, null, result.messages))
 		}
-
-		setSummary(buildSummary(source, api, data.endpoints.size, result.messages))
 		AppContext.logging.logToOutput("[SpecDrift] $source -> success=${result.isSuccess}")
 
 		if (result.isSuccess) {
@@ -221,18 +225,17 @@ class SpecTab(val data: SpecTabData) {
 	private fun renderRestored() {
 		tablePanel.setRows(data.endpoints)
 		tablePanel.setGlobalOverride(data.baseOverride)
-		setSummary(buildSummary(data.source ?: "Restored", data.openAPI, data.endpoints.size, emptyList()))
+		setSummary(buildSummary(data.source ?: "Restored", data.importedSpec, emptyList()))
 	}
 
-	private fun buildSummary(source: String, api: OpenAPI?, endpointCount: Int, messages: List<String>): String {
+	private fun buildSummary(source: String, spec: ImportedSpec?, messages: List<String>): String {
 		val sb = StringBuilder()
 		sb.appendLine(source)
-		if (api != null) {
-			val info = api.info
-			sb.appendLine("Title:    ${info?.title ?: "-"}")
-			sb.appendLine("Version:  ${info?.version ?: "-"}")
-			sb.appendLine("OpenAPI:  ${api.openapi ?: "-"}")
-			sb.appendLine("Endpoints: $endpointCount")
+		if (spec != null) {
+			sb.appendLine("Title:    ${spec.title ?: "-"}")
+			sb.appendLine("Version:  ${spec.version ?: "-"}")
+			sb.appendLine("OpenAPI:  ${spec.openApiVersion ?: "-"}")
+			sb.appendLine("Endpoints: ${spec.endpoints.size}")
 		} else {
 			sb.appendLine("Parsing failed.")
 		}
@@ -251,20 +254,68 @@ class SpecTab(val data: SpecTabData) {
 			return
 		}
 		val sb = StringBuilder()
-		sb.appendLine("Method:      ${row.method}")
-		sb.appendLine("Route:       ${row.route(data.baseOverride)}")
-		sb.appendLine("Path:        ${row.path}")
-		sb.appendLine("Base:        ${row.effectiveBase(data.baseOverride) ?: "<none>"}")
+		sb.appendLine("Method:       ${row.method}")
+		sb.appendLine("Route:        ${row.route(data.baseOverride)}")
+		sb.appendLine("Path:         ${row.path}")
+		sb.appendLine("Base:         ${row.effectiveBase(data.baseOverride) ?: "<none>"}")
 		if (row.alternativeBases.isNotEmpty()) {
-			sb.appendLine("Other bases: ${row.alternativeBases.joinToString()}")
+			sb.appendLine("Other bases:  ${row.alternativeBases.joinToString()}")
 		}
-		sb.appendLine("OperationId: ${row.operationId ?: "-"}")
-		sb.appendLine("Summary:     ${row.summary ?: "-"}")
-		if (row.tags.isNotEmpty()) {
-			sb.appendLine("Tags:        ${row.tags.joinToString()}")
+		sb.appendLine("OperationId:  ${row.operationId ?: "-"}")
+		sb.appendLine("Summary:      ${row.summary ?: "-"}")
+		sb.appendLine("Description:  ${row.description ?: "-"}")
+		sb.appendLine("Deprecated:   ${row.deprecated}")
+		sb.appendLine("Security:     ${row.security.ifEmpty { listOf("-") }.joinToString()}")
+		sb.appendLine("Tags:         ${row.tags.ifEmpty { listOf("-") }.joinToString()}")
+
+		sb.appendLine()
+		sb.appendLine("Parameters:")
+		if (row.parameters.isEmpty()) {
+			sb.appendLine("  -")
+		} else {
+			row.parameters.forEach { sb.appendLine("  ${formatParam(it)}") }
 		}
+
+		sb.appendLine()
+		val body = row.requestBody
+		if (body == null) {
+			sb.appendLine("Request body: -")
+		} else {
+			sb.appendLine("Request body: ${if (body.required) "required" else "optional"}")
+			if (body.contents.isEmpty()) sb.appendLine("  -")
+			else body.contents.forEach { appendContent(sb, it) }
+		}
+
+		sb.appendLine()
+		sb.appendLine("Responses:")
+		if (row.responses.isEmpty()) {
+			sb.appendLine("  -")
+		} else {
+			row.responses.forEach { response ->
+				sb.append("  - ${response.statusCode}")
+				response.description?.let { sb.append(": $it") }
+				sb.appendLine()
+				response.contents.forEach { appendContent(sb, it) }
+			}
+		}
+
 		detailArea.text = sb.toString()
 		detailArea.caretPosition = 0
+	}
+
+	/** Appends a media type and, indented below it, its example (if any). */
+	private fun appendContent(sb: StringBuilder, content: ContentExample) {
+		sb.appendLine("    ${content.mediaType}")
+		content.example?.lineSequence()?.forEach { line -> sb.appendLine("      $line") }
+	}
+
+	private fun formatParam(param: Param): String = buildString {
+		append("- ${param.name} (${param.location}")
+		if (param.required) append(", required")
+		append(")")
+		param.type?.let { append(": $it") }
+		param.description?.let { append(" — $it") }
+		param.example?.let { append(" [example: $it]") }
 	}
 
 	private fun setSummary(text: String) {

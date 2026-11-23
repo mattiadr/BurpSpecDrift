@@ -1,16 +1,28 @@
 package com.mattiadr.burpSpecDrift.model
 
 import io.swagger.v3.oas.models.OpenAPI
+import io.swagger.v3.oas.models.Operation
+import io.swagger.v3.oas.models.media.Content
+import io.swagger.v3.oas.models.parameters.RequestBody
+import io.swagger.v3.oas.models.responses.ApiResponse
 import io.swagger.v3.oas.models.servers.Server
+import io.swagger.v3.oas.models.parameters.Parameter as OasParameter
 
 /**
- * Flattens an [OpenAPI] model into [EndpointRow]s, one per operation. Server URLs are
- * resolved with the precedence operation → path → root, and server variables are
- * substituted with their declared defaults.
+ * Flattens an [OpenAPI] model into [EndpointRow]s, one per operation. Server URLs are resolved
+ * with the precedence operation → path → root (variables substituted with their defaults). Detail
+ * fields are kept shallow: content types + an optional text example rather than full schemas.
  */
 object EndpointExtractor {
 
-	fun extract(openAPI: OpenAPI): List<EndpointRow> {
+	fun extract(openAPI: OpenAPI): ImportedSpec = ImportedSpec(
+		title = openAPI.info?.title,
+		version = openAPI.info?.version,
+		openApiVersion = openAPI.openapi,
+		endpoints = extractEndpoints(openAPI),
+	)
+
+	private fun extractEndpoints(openAPI: OpenAPI): List<EndpointRow> {
 		val rootServers = resolveServers(openAPI.servers)
 		val paths = openAPI.paths ?: return emptyList()
 
@@ -27,12 +39,69 @@ object EndpointExtractor {
 					alternativeBases = if (bases.size > 1) bases.drop(1) else emptyList(),
 					operationId = operation.operationId,
 					summary = operation.summary,
+					description = operation.description,
 					tags = operation.tags ?: emptyList(),
+					deprecated = operation.deprecated == true,
+					security = security(openAPI, operation),
+					parameters = parameters(item.parameters, operation.parameters),
+					requestBody = requestBody(operation.requestBody, openAPI),
+					responses = responses(operation, openAPI),
 				)
 			}
 		}
 		return rows
 	}
+
+	/** Names of the security schemes required by the operation (falls back to the root security). */
+	private fun security(openAPI: OpenAPI, operation: Operation): List<String> {
+		val requirements = operation.security ?: openAPI.security ?: return emptyList()
+		return requirements.flatMap { it.keys }.distinct()
+	}
+
+	/** Merges path-level and operation-level parameters; operation overrides by (name, in). */
+	private fun parameters(pathParams: List<OasParameter>?, opParams: List<OasParameter>?): List<Param> {
+		val merged = LinkedHashMap<String, OasParameter>()
+		(pathParams.orEmpty() + opParams.orEmpty()).forEach { merged["${it.name}:${it.`in`}"] = it }
+		return merged.values.map { param ->
+			Param(
+				name = param.name ?: "",
+				location = param.`in` ?: "",
+				required = param.required == true,
+				type = param.schema?.type,
+				description = param.description,
+				example = (param.example ?: param.schema?.example)?.toString(),
+			)
+		}
+	}
+
+	private fun requestBody(body: RequestBody?, openAPI: OpenAPI): Body? {
+		if (body == null) return null
+		return Body(
+			required = body.required == true,
+			contents = contents(body.content, openAPI),
+		)
+	}
+
+	private fun responses(operation: Operation, openAPI: OpenAPI): List<ResponseInfo> {
+		val responses = operation.responses ?: return emptyList()
+		return responses.map { (code, response: ApiResponse) ->
+			ResponseInfo(
+				statusCode = code,
+				description = response.description,
+				contents = contents(response.content, openAPI),
+			)
+		}
+	}
+
+	/** One [ContentExample] per media type: the declared example, or one generated from the schema. */
+	private fun contents(content: Content?, openAPI: OpenAPI): List<ContentExample> =
+		content?.map { (mediaType, media) ->
+			ContentExample(mediaType, exampleOf(media) ?: SchemaExampleGenerator.generateJson(media.schema, openAPI))
+		} ?: emptyList()
+
+	/** The example explicitly declared for a single media type (inline, named, or in its schema). */
+	private fun exampleOf(media: io.swagger.v3.oas.models.media.MediaType): String? =
+		(media.example ?: media.examples?.values?.firstOrNull()?.value ?: media.schema?.example)?.toString()
 
 	/**
 	 * Resolves server URLs, dropping the "/" placeholder that swagger-parser injects when a

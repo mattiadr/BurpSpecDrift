@@ -3,7 +3,6 @@ package com.mattiadr.burpSpecDrift.spec
 import burp.api.montoya.http.message.requests.HttpRequest
 import com.mattiadr.burpSpecDrift.core.AppContext
 import io.swagger.parser.OpenAPIParser
-import io.swagger.v3.core.util.Json
 import io.swagger.v3.oas.models.OpenAPI
 import io.swagger.v3.parser.core.models.ParseOptions
 import java.nio.file.Files
@@ -36,9 +35,6 @@ object SpecParser {
 		val result = OpenAPIParser().readContents(content, null, parseOptions())
 		return SpecParseResult(result.openAPI, result.messages ?: emptyList())
 	}
-
-	/** Serializes a resolved spec to self-contained JSON for persistence. */
-	fun toJson(openAPI: OpenAPI): String = Json.pretty(openAPI)
 
 	/** Loads and parses a spec from a local file. */
 	fun parseFile(path: Path): SpecParseResult {

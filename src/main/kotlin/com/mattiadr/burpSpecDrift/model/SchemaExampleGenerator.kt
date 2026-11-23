@@ -1,0 +1,65 @@
+package com.mattiadr.burpSpecDrift.model
+
+import io.swagger.v3.core.util.Json
+import io.swagger.v3.oas.models.OpenAPI
+import io.swagger.v3.oas.models.media.Schema
+
+/**
+ * Builds a sample body from a schema (Swagger-UI style) when the spec provides no example.
+ * Prefers explicit example/default/enum, then falls back to type defaults, resolving `$ref`
+ * against the spec components with a cycle guard.
+ */
+object SchemaExampleGenerator {
+
+	/** Returns a JSON sample for [schema], or null if nothing could be built. */
+	fun generateJson(schema: Schema<*>?, openAPI: OpenAPI): String? {
+		val value = build(schema, openAPI, HashSet()) ?: return null
+		return runCatching { Json.pretty(value) }.getOrNull()
+	}
+
+	private fun build(schema: Schema<*>?, openAPI: OpenAPI, seen: MutableSet<String>): Any? {
+		if (schema == null) return null
+
+		schema.`$ref`?.let { ref ->
+			val name = ref.substringAfterLast('/')
+			if (!seen.add(name)) return null // cycle
+			val resolved = build(openAPI.components?.schemas?.get(name), openAPI, seen)
+			seen.remove(name)
+			return resolved
+		}
+
+		schema.example?.let { return it }
+		schema.default?.let { return it }
+		schema.getEnum()?.firstOrNull()?.let { return it }
+
+		schema.allOf?.let { parts ->
+			val merged = LinkedHashMap<String, Any?>()
+			parts.forEach { (build(it, openAPI, seen) as? Map<*, *>)?.forEach { (k, v) -> merged[k.toString()] = v } }
+			if (merged.isNotEmpty()) return merged
+		}
+		(schema.oneOf ?: schema.anyOf)?.firstOrNull()?.let { return build(it, openAPI, seen) }
+
+		val type = schema.type ?: schema.types?.firstOrNull()
+		return when {
+			type == "object" || schema.properties != null -> {
+				val obj = LinkedHashMap<String, Any?>()
+				schema.properties?.forEach { (name, prop) -> obj[name] = build(prop, openAPI, seen) }
+				obj
+			}
+			type == "array" -> listOf(build(schema.items, openAPI, seen))
+			type == "integer" || type == "number" -> 0
+			type == "boolean" -> true
+			type == "string" -> stringSample(schema.format)
+			else -> null
+		}
+	}
+
+	private fun stringSample(format: String?): String = when (format) {
+		"date" -> "2020-01-01"
+		"date-time" -> "2020-01-01T00:00:00Z"
+		"uuid" -> "00000000-0000-0000-0000-000000000000"
+		"email" -> "user@example.com"
+		"byte" -> "U3dhZ2dlcg=="
+		else -> "string"
+	}
+}
