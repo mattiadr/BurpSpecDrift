@@ -101,11 +101,20 @@ object OpenApiImporter {
 		}
 	}
 
-	/** One [ContentExample] per media type: the declared example, or one generated from the schema. */
+	/**
+	 * One [ContentExample] per media type: the declared example, or - only for JSON media types - a
+	 * sample generated from the schema. For non-JSON types (e.g. application/xml) we keep whatever
+	 * example the spec declares but don't synthesize one, so we never label JSON as another format.
+	 */
 	private fun contents(content: Content?, openAPI: OpenAPI): List<ContentExample> =
 		content?.map { (mediaType, media) ->
-			ContentExample(mediaType, exampleOf(media) ?: OpenApiSchemaExampleGenerator.generateJson(media.schema, openAPI))
+			val generated = if (isJsonMediaType(mediaType)) OpenApiSchemaExampleGenerator.generateJson(media.schema, openAPI) else null
+			ContentExample(mediaType, exampleOf(media) ?: generated)
 		} ?: emptyList()
+
+	/** True for application/json and any structured JSON type (e.g. application/problem+json). */
+	private fun isJsonMediaType(mediaType: String): Boolean =
+		mediaType.substringBefore(';').trim().endsWith("json", ignoreCase = true)
 
 	/** The example explicitly declared for a single media type (inline, named, or in its schema). */
 	private fun exampleOf(media: MediaType): String? =
