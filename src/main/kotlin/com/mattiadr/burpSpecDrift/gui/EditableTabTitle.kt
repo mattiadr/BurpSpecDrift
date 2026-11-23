@@ -3,19 +3,8 @@ package com.mattiadr.burpSpecDrift.gui
 import com.mattiadr.burpSpecDrift.model.SpecTabData
 import java.awt.BorderLayout
 import java.awt.Insets
-import java.awt.event.FocusAdapter
-import java.awt.event.FocusEvent
-import java.awt.event.KeyEvent
-import java.awt.event.MouseAdapter
-import java.awt.event.MouseEvent
-import javax.swing.BorderFactory
-import javax.swing.JButton
-import javax.swing.JComponent
-import javax.swing.JLabel
-import javax.swing.JPanel
-import javax.swing.JTabbedPane
-import javax.swing.JTextField
-import javax.swing.KeyStroke
+import java.awt.event.*
+import javax.swing.*
 
 /**
  * Tab title component with an editable label and a close button. A single click
@@ -65,7 +54,7 @@ class EditableTabTitle(
 		editor.registerKeyboardAction(
 			{ stopEditing() },
 			KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0),
-			JComponent.WHEN_FOCUSED,
+			WHEN_FOCUSED,
 		)
 	}
 

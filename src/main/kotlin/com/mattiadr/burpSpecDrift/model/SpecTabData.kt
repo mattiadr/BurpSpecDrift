@@ -17,9 +17,6 @@ class SpecTabData(
 	/** The displayed tab name, by priority: user > spec title > default number. */
 	val name: String get() = userName ?: importedSpec?.title ?: defaultName
 
-	/** The user-set name, or null — exposed for persistence. */
-	val userNameValue: String? get() = userName
-
 	/** The imported spec (info + endpoints), or null while nothing has been loaded. */
 	var importedSpec: ImportedSpec? = null
 		private set

@@ -136,7 +136,7 @@ object BasePopup {
 			"New base URL:",
 			"Add base override",
 			JOptionPane.PLAIN_MESSAGE,
-		) as String?
+		)
 		val base = input?.trim()
 		if (base.isNullOrEmpty()) return
 		data.addCustomBase(base)

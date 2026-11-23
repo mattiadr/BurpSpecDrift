@@ -16,11 +16,11 @@ All of this lives in the `runtime` package (engine + matcher). `gui/` stays GUI-
 
 Traffic is attributed to one of three counters, by originating Burp tool:
 
-| Counter        | Source                                   | Mechanism                     |
-|----------------|------------------------------------------|-------------------------------|
-| `proxyHits`    | Proxy                                    | HTTP handler (live) + history backfill |
-| `repeaterHits` | Repeater                                 | HTTP handler (live) only      |
-| `otherHits`    | everything else (Intruder, Scanner, …)   | HTTP handler (live) only      |
+| Counter        | Source                                 | Mechanism                              |
+|----------------|----------------------------------------|----------------------------------------|
+| `proxyHits`    | Proxy                                  | HTTP handler (live) + history backfill |
+| `repeaterHits` | Repeater                               | HTTP handler (live) only               |
+| `otherHits`    | everything else (Intruder, Scanner, …) | HTTP handler (live) only               |
 
 A single `HttpHandler` (`handleHttpRequestToBeSent`) inspects `toolSource().toolType()`:
 `PROXY → proxyHits`, `REPEATER → repeaterHits`, anything else `→ otherHits`.

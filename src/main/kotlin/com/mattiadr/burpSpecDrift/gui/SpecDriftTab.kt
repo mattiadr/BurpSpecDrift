@@ -48,24 +48,6 @@ class SpecDriftTab {
 
 	val component: JComponent get() = tabbedPane
 
-	/**
-	 * A tab-separated dump of the current hit counters, one line per route, for test/debug: paste it
-	 * and compare against scripts/hit_counting_test.py. Columns: method, path, proxy, repeater, other.
-	 */
-	fun hitsReport(): String {
-		val sb = StringBuilder("method\tpath\tproxy\trepeater\tother\ttab\n")
-		model.tabs.forEach { tab ->
-			tab.endpoints
-				.sortedWith(compareBy({ it.method }, { it.path }))
-				.forEach { row ->
-					sb.append(row.method).append('\t').append(row.path).append('\t')
-						.append(row.proxyHits).append('\t').append(row.repeaterHits).append('\t')
-						.append(row.otherHits).append('\t').append(tab.name).append('\n')
-				}
-		}
-		return sb.toString()
-	}
-
 	init {
 		tabbedPane.addTab("+", plusPanel)
 		tabbedPane.setTabComponentAt(tabbedPane.indexOfComponent(plusPanel), buildPlusLabel())

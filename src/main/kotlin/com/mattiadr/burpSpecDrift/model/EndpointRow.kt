@@ -47,9 +47,6 @@ class EndpointRow(
 	/** Matching requests seen from any other Burp tool. Populated by the diff later. */
 	var otherHits: Int = 0,
 ) {
-	/** Stable identity of this route within a spec (unique: paths and methods don't repeat). */
-	fun key(): String = "$method $path"
-
 	/** The base this route would use without its own override (global override or spec base). */
 	fun defaultBase(globalOverride: String?): String? = globalOverride ?: specBase
 
