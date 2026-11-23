@@ -2,13 +2,13 @@ package com.mattiadr.burpSpecDrift.gui
 
 import com.mattiadr.burpSpecDrift.core.AppContext
 import com.mattiadr.burpSpecDrift.model.ContentExample
-import com.mattiadr.burpSpecDrift.model.EndpointExtractor
 import com.mattiadr.burpSpecDrift.model.EndpointRow
 import com.mattiadr.burpSpecDrift.model.ImportedSpec
 import com.mattiadr.burpSpecDrift.model.Param
 import com.mattiadr.burpSpecDrift.model.SpecTabData
-import com.mattiadr.burpSpecDrift.spec.SpecParseResult
-import com.mattiadr.burpSpecDrift.spec.SpecParser
+import com.mattiadr.burpSpecDrift.spec.openapi.OpenApiImporter
+import com.mattiadr.burpSpecDrift.spec.openapi.OpenApiParseResult
+import com.mattiadr.burpSpecDrift.spec.openapi.OpenApiParser
 import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.Component
@@ -142,7 +142,7 @@ class SpecTab(val data: SpecTabData) {
 			setSummary("Enter a URL.")
 			return
 		}
-		loadAsync("URL: $url") { SpecParser.parseUrl(url) }
+		loadAsync("URL: $url") { OpenApiParser.parseUrl(url) }
 	}
 
 	private fun onLoadFile() {
@@ -151,7 +151,7 @@ class SpecTab(val data: SpecTabData) {
 		if (chooser.showOpenDialog(component) != JFileChooser.APPROVE_OPTION) return
 		lastDirectory = chooser.currentDirectory
 		val path = chooser.selectedFile.toPath()
-		if (loadAsync("File: $path") { SpecParser.parseFile(path) }) {
+		if (loadAsync("File: $path") { OpenApiParser.parseFile(path) }) {
 			// Show the loaded file as a muted hint and free the URL field.
 			urlField.text = ""
 			urlField.hint = path.toString()
@@ -160,14 +160,14 @@ class SpecTab(val data: SpecTabData) {
 
 	/** Loads a spec from already-retrieved content (e.g. a response body sent from Burp). */
 	fun loadFromString(content: String) {
-		loadAsync("Sent from Burp") { SpecParser.parseContent(content) }
+		loadAsync("Sent from Burp") { OpenApiParser.parseContent(content) }
 	}
 
 	/**
 	 * Runs the parsing on a background thread and updates the UI on the EDT. Returns false
 	 * (without loading) when the tab already has a spec and the user declines to replace it.
 	 */
-	private fun loadAsync(source: String, block: () -> SpecParseResult): Boolean {
+	private fun loadAsync(source: String, block: () -> OpenApiParseResult): Boolean {
 		if (data.hasLoadedSpec && !confirmReplace()) return false
 		setButtonsEnabled(false)
 		setSummary("Loading $source ...")
@@ -175,7 +175,7 @@ class SpecTab(val data: SpecTabData) {
 			val result = try {
 				block()
 			} catch (e: Exception) {
-				SpecParseResult(null, listOf("Error: ${e.message}"))
+				OpenApiParseResult(null, listOf("Error: ${e.message}"))
 			}
 			SwingUtilities.invokeLater {
 				renderResult(source, result)
@@ -201,10 +201,10 @@ class SpecTab(val data: SpecTabData) {
 		return choice == JOptionPane.YES_OPTION
 	}
 
-	private fun renderResult(source: String, result: SpecParseResult) {
+	private fun renderResult(source: String, result: OpenApiParseResult) {
 		val api = result.openAPI
 		if (api != null) {
-			val imported = EndpointExtractor.extract(api)
+			val imported = OpenApiImporter.extract(api)
 			data.onSpecLoaded(imported, source)
 			tablePanel.setRows(data.endpoints)
 			tablePanel.setGlobalOverride(data.baseOverride)

@@ -1,15 +1,15 @@
-package com.mattiadr.burpSpecDrift.model
+package com.mattiadr.burpSpecDrift.spec.openapi
 
 import io.swagger.v3.core.util.Json
 import io.swagger.v3.oas.models.OpenAPI
 import io.swagger.v3.oas.models.media.Schema
 
 /**
- * Builds a sample body from a schema (Swagger-UI style) when the spec provides no example.
+ * Builds a sample body from an OpenAPI schema (Swagger-UI style) when the spec provides no example.
  * Prefers explicit example/default/enum, then falls back to type defaults, resolving `$ref`
  * against the spec components with a cycle guard.
  */
-object SchemaExampleGenerator {
+object OpenApiSchemaExampleGenerator {
 
 	/** Returns a JSON sample for [schema], or null if nothing could be built. */
 	fun generateJson(schema: Schema<*>?, openAPI: OpenAPI): String? {
@@ -30,7 +30,7 @@ object SchemaExampleGenerator {
 
 		schema.example?.let { return it }
 		schema.default?.let { return it }
-		schema.getEnum()?.firstOrNull()?.let { return it }
+		schema.getEnum()?.takeIf { it.isNotEmpty() }?.let { return it.joinToString("|") }
 
 		schema.allOf?.let { parts ->
 			val merged = LinkedHashMap<String, Any?>()

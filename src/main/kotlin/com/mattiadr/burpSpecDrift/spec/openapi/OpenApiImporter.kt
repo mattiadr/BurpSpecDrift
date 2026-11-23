@@ -1,19 +1,27 @@
-package com.mattiadr.burpSpecDrift.model
+package com.mattiadr.burpSpecDrift.spec.openapi
 
+import com.mattiadr.burpSpecDrift.model.Body
+import com.mattiadr.burpSpecDrift.model.ContentExample
+import com.mattiadr.burpSpecDrift.model.EndpointRow
+import com.mattiadr.burpSpecDrift.model.ImportedSpec
+import com.mattiadr.burpSpecDrift.model.Param
+import com.mattiadr.burpSpecDrift.model.ResponseInfo
 import io.swagger.v3.oas.models.OpenAPI
 import io.swagger.v3.oas.models.Operation
 import io.swagger.v3.oas.models.media.Content
+import io.swagger.v3.oas.models.media.MediaType
 import io.swagger.v3.oas.models.parameters.RequestBody
 import io.swagger.v3.oas.models.responses.ApiResponse
 import io.swagger.v3.oas.models.servers.Server
 import io.swagger.v3.oas.models.parameters.Parameter as OasParameter
 
 /**
- * Flattens an [OpenAPI] model into [EndpointRow]s, one per operation. Server URLs are resolved
- * with the precedence operation → path → root (variables substituted with their defaults). Detail
- * fields are kept shallow: content types + an optional text example rather than full schemas.
+ * Imports an [OpenAPI] model into the generic [ImportedSpec] (info + [EndpointRow]s), one row per
+ * operation. Server URLs are resolved with the precedence operation → path → root (variables
+ * substituted with defaults). Detail is kept shallow: content types + an example (declared, or
+ * generated from the schema) rather than full schemas.
  */
-object EndpointExtractor {
+object OpenApiImporter {
 
 	fun extract(openAPI: OpenAPI): ImportedSpec = ImportedSpec(
 		title = openAPI.info?.title,
@@ -96,11 +104,11 @@ object EndpointExtractor {
 	/** One [ContentExample] per media type: the declared example, or one generated from the schema. */
 	private fun contents(content: Content?, openAPI: OpenAPI): List<ContentExample> =
 		content?.map { (mediaType, media) ->
-			ContentExample(mediaType, exampleOf(media) ?: SchemaExampleGenerator.generateJson(media.schema, openAPI))
+			ContentExample(mediaType, exampleOf(media) ?: OpenApiSchemaExampleGenerator.generateJson(media.schema, openAPI))
 		} ?: emptyList()
 
 	/** The example explicitly declared for a single media type (inline, named, or in its schema). */
-	private fun exampleOf(media: io.swagger.v3.oas.models.media.MediaType): String? =
+	private fun exampleOf(media: MediaType): String? =
 		(media.example ?: media.examples?.values?.firstOrNull()?.value ?: media.schema?.example)?.toString()
 
 	/**
