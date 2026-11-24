@@ -11,19 +11,25 @@ import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.Component
 import java.awt.Dimension
+import java.awt.event.ActionEvent
 import java.awt.event.ComponentAdapter
 import java.awt.event.ComponentEvent
+import java.awt.event.InputEvent
+import java.awt.event.KeyEvent
 import java.io.File
 import javax.swing.event.DocumentEvent
 import javax.swing.event.DocumentListener
+import javax.swing.AbstractAction
 import javax.swing.Box
 import javax.swing.BorderFactory
 import javax.swing.JButton
+import javax.swing.JComponent
 import javax.swing.JFileChooser
 import javax.swing.JLabel
 import javax.swing.JOptionPane
 import javax.swing.JPanel
 import javax.swing.JSplitPane
+import javax.swing.KeyStroke
 import javax.swing.SwingConstants
 import javax.swing.SwingUtilities
 import javax.swing.UIManager
@@ -98,6 +104,7 @@ class SpecTab(val data: SpecTabData) {
 		})
 		tablePanel.onRowSelected = { row -> showDetail(row) }
 		data.onBasesChanged = { onBasesChanged() }
+		installShortcuts()
 		detailPanel.showSummary(summaryText)
 		updateBaseOverrideButton()
 		if (data.hasLoadedSpec) renderRestored()
@@ -171,6 +178,28 @@ class SpecTab(val data: SpecTabData) {
 	private fun fixFieldWidth(component: Component) {
 		component.minimumSize = component.preferredSize
 		component.maximumSize = component.preferredSize
+	}
+
+	/**
+	 * Binds Ctrl+R / Ctrl+I to send the selected routes to Repeater / Intruder. Registered on this
+	 * tab's root with WHEN_ANCESTOR_OF_FOCUSED_COMPONENT, so the shortcuts fire wherever focus is in
+	 * the tab (the endpoint table or any detail-panel component), but not from other tabs.
+	 */
+	private fun installShortcuts() {
+		val inputMap = component.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT)
+		val actionMap = component.actionMap
+		inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_R, InputEvent.CTRL_DOWN_MASK), "sendToRepeater")
+		inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_I, InputEvent.CTRL_DOWN_MASK), "sendToIntruder")
+		inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_O, InputEvent.CTRL_DOWN_MASK), "sendToOrganizer")
+		actionMap.put("sendToRepeater", object : AbstractAction() {
+			override fun actionPerformed(e: ActionEvent) = tablePanel.sendSelectedToRepeater()
+		})
+		actionMap.put("sendToIntruder", object : AbstractAction() {
+			override fun actionPerformed(e: ActionEvent) = tablePanel.sendSelectedToIntruder()
+		})
+		actionMap.put("sendToOrganizer", object : AbstractAction() {
+			override fun actionPerformed(e: ActionEvent) = tablePanel.sendSelectedToOrganizer()
+		})
 	}
 
 	/** Clears both the per-column filters and the path search (the latter via the search field). */

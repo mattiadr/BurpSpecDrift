@@ -113,7 +113,6 @@ class EndpointTablePanel(private val data: SpecTabData) {
 				if (event.isPopupTrigger) showContextMenu(event)
 			}
 		})
-		installShortcuts()
 		installHeaderFilters()
 		// Keep Path filling the leftover viewport width as the table/window is resized.
 		component.viewport.addComponentListener(object : ComponentAdapter() {
@@ -144,23 +143,14 @@ class EndpointTablePanel(private val data: SpecTabData) {
 		}
 	}
 
-	/** Ctrl+R / Ctrl+I send every selected route to Repeater / Intruder. */
-	private fun installShortcuts() {
-		val inputMap = table.getInputMap(JComponent.WHEN_FOCUSED)
-		val actionMap = table.actionMap
-		inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_R, InputEvent.CTRL_DOWN_MASK), "sendToRepeater")
-		inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_I, InputEvent.CTRL_DOWN_MASK), "sendToIntruder")
-		actionMap.put("sendToRepeater", object : AbstractAction() {
-			override fun actionPerformed(e: ActionEvent) {
-				selectedRoutes().forEach { sendToRepeater(it) }
-			}
-		})
-		actionMap.put("sendToIntruder", object : AbstractAction() {
-			override fun actionPerformed(e: ActionEvent) {
-				selectedRoutes().forEach { sendToIntruder(it) }
-			}
-		})
-	}
+	/** Sends every selected route to Repeater. Bound to Ctrl+R by the owning [SpecTab]. */
+	fun sendSelectedToRepeater() = selectedRoutes().forEach { sendToRepeater(it) }
+
+	/** Sends every selected route to Intruder. Bound to Ctrl+I by the owning [SpecTab]. */
+	fun sendSelectedToIntruder() = selectedRoutes().forEach { sendToIntruder(it) }
+
+	/** Sends every selected route to Organizer. Bound to Ctrl+O by the owning [SpecTab]. */
+	fun sendSelectedToOrganizer() = selectedRoutes().forEach { sendToOrganizer(it) }
 
 	fun setRows(rows: List<EndpointRow>) {
 		table.clearSelection()
@@ -346,6 +336,7 @@ class EndpointTablePanel(private val data: SpecTabData) {
 		menu.addSeparator()
 		menu.add(sendItem("Send to Repeater", "Ctrl+R") { routes.forEach { sendToRepeater(it) } })
 		menu.add(sendItem("Send to Intruder", "Ctrl+I") { routes.forEach { sendToIntruder(it) } })
+		menu.add(sendItem("Send to Organizer", "Ctrl+O") { routes.forEach { sendToOrganizer(it) } })
 
 		menu.show(table, event.x, event.y)
 	}
@@ -385,6 +376,11 @@ class EndpointTablePanel(private val data: SpecTabData) {
 	private fun sendToIntruder(row: EndpointRow) {
 		val request = buildRequest(row) ?: return
 		AppContext.api.intruder().sendToIntruder(request)
+	}
+
+	private fun sendToOrganizer(row: EndpointRow) {
+		val request = buildRequest(row) ?: return
+		AppContext.api.organizer().sendToOrganizer(request)
 	}
 
 	/** Builds a request from the route's effective base + path; null when no base is known. */
