@@ -1,0 +1,187 @@
+openapi: 3.1.0
+info:
+  title: Auth Types Demo
+  version: 1.0.0
+  description: >
+    A spec exercising every OpenAPI security scheme type and the AND/OR semantics of
+    security requirements. Built to test SpecDrift's Auth column (scheme names) and the
+    detail view (resolved type, mechanism, scopes, and AND/OR structure).
+
+servers:
+  - url: https://api.example.com/v1
+
+# No root-level `security` here, so an operation that declares none is "unknown" (unspecified)
+# rather than public. Uncomment the block below to instead make apiKeyHeader the global default,
+# which every operation without its own `security` would then inherit:
+#
+# security:
+#   - apiKeyHeader: []
+
+paths:
+  /public:
+    get:
+      operationId: getPublic
+      summary: Explicitly public, no auth
+      description: Declares an empty security list, which disables auth - distinct from "unknown".
+      security: []            # explicitly disables auth -> detail view shows <none>
+      responses:
+        "200": { description: OK }
+
+  /unspecified:
+    get:
+      operationId: getUnspecified
+      summary: Auth not specified
+      description: >
+        Declares no security, and the spec has no root-level security either, so auth is unknown -
+        the detail view shows <unknown>, as opposed to the explicit <none> of /public.
+      responses:
+        "200": { description: OK }
+
+  /profile:
+    get:
+      operationId: getProfile
+      summary: Bearer JWT
+      security:
+        - bearerAuth: []
+      responses:
+        "200": { description: OK }
+        "401": { description: Unauthorized }
+
+  /legacy:
+    get:
+      operationId: getLegacy
+      summary: HTTP Basic
+      security:
+        - basicAuth: []
+      responses:
+        "200": { description: OK }
+
+  /search:
+    get:
+      operationId: search
+      summary: API key in the query string
+      security:
+        - apiKeyQuery: []
+      parameters:
+        - { name: q, in: query, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK }
+
+  /session:
+    get:
+      operationId: getSession
+      summary: API key in a cookie
+      security:
+        - apiKeyCookie: []
+      responses:
+        "200": { description: OK }
+
+  /admin:
+    delete:
+      operationId: deleteAdmin
+      summary: Requires an API key AND basic auth together (AND)
+      description: A single requirement listing two schemes - both must be satisfied.
+      security:
+        - apiKeyHeader: []
+          basicAuth: []
+      responses:
+        "204": { description: Deleted }
+
+  /data:
+    get:
+      operationId: getData
+      summary: Bearer token OR API key (OR)
+      description: Two alternative requirements - satisfying either one authorizes the call.
+      security:
+        - bearerAuth: []
+        - apiKeyQuery: []
+      responses:
+        "200": { description: OK }
+
+  /reports:
+    get:
+      operationId: getReports
+      summary: OAuth2 with scopes
+      security:
+        - oauth2:
+            - reports:read
+            - reports:write
+      responses:
+        "200": { description: OK }
+
+  /identity:
+    get:
+      operationId: getIdentity
+      summary: OpenID Connect
+      security:
+        - openId:
+            - profile
+            - email
+      responses:
+        "200": { description: OK }
+
+  /secure-channel:
+    get:
+      operationId: getSecureChannel
+      summary: Mutual TLS
+      security:
+        - mutualTls: []
+      responses:
+        "200": { description: OK }
+
+  /referenced-but-undefined:
+    get:
+      operationId: getUndefinedScheme
+      summary: References a scheme that is not declared in components
+      description: Exercises the graceful fallback - only the name is shown, no resolved detail.
+      security:
+        - ghostAuth: []
+      responses:
+        "200": { description: OK }
+
+components:
+  securitySchemes:
+    apiKeyHeader:
+      type: apiKey
+      in: header
+      name: X-API-Key
+
+    apiKeyQuery:
+      type: apiKey
+      in: query
+      name: api_key
+
+    apiKeyCookie:
+      type: apiKey
+      in: cookie
+      name: SESSION
+
+    basicAuth:
+      type: http
+      scheme: basic
+
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+    oauth2:
+      type: oauth2
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.example.com/authorize
+          tokenUrl: https://auth.example.com/token
+          scopes:
+            reports:read: Read reports
+            reports:write: Create and edit reports
+        clientCredentials:
+          tokenUrl: https://auth.example.com/token
+          scopes:
+            reports:read: Read reports
+
+    openId:
+      type: openIdConnect
+      openIdConnectUrl: https://auth.example.com/.well-known/openid-configuration
+
+    mutualTls:
+      type: mutualTLS

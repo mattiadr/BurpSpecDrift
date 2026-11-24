@@ -6,6 +6,8 @@ import com.mattiadr.burpSpecDrift.model.EndpointRow
 import com.mattiadr.burpSpecDrift.model.ImportedSpec
 import com.mattiadr.burpSpecDrift.model.Param
 import com.mattiadr.burpSpecDrift.model.ResponseInfo
+import com.mattiadr.burpSpecDrift.model.SecurityRequirement
+import com.mattiadr.burpSpecDrift.model.SecurityScheme
 import io.swagger.v3.oas.models.OpenAPI
 import io.swagger.v3.oas.models.Operation
 import io.swagger.v3.oas.models.media.Content
@@ -14,6 +16,7 @@ import io.swagger.v3.oas.models.parameters.RequestBody
 import io.swagger.v3.oas.models.responses.ApiResponse
 import io.swagger.v3.oas.models.servers.Server
 import io.swagger.v3.oas.models.parameters.Parameter as OasParameter
+import io.swagger.v3.oas.models.security.SecurityScheme as OasSecurityScheme
 
 /**
  * Imports an [OpenAPI] model into the generic [ImportedSpec] (info + [EndpointRow]s), one row per
@@ -50,7 +53,7 @@ object OpenApiImporter {
 					description = operation.description,
 					tags = operation.tags ?: emptyList(),
 					deprecated = operation.deprecated == true,
-					security = security(openAPI, operation),
+					securityRequirements = security(openAPI, operation),
 					parameters = parameters(item.parameters, operation.parameters),
 					requestBody = requestBody(operation.requestBody, openAPI),
 					responses = responses(operation, openAPI),
@@ -60,10 +63,50 @@ object OpenApiImporter {
 		return rows
 	}
 
-	/** Names of the security schemes required by the operation (falls back to the root security). */
-	private fun security(openAPI: OpenAPI, operation: Operation): List<String> {
-		val requirements = operation.security ?: openAPI.security ?: return emptyList()
-		return requirements.flatMap { it.keys }.distinct()
+	/**
+	 * Security requirements for the operation (falling back to the root security), each scheme
+	 * resolved against `components.securitySchemes` for a richer detail view. The outer list is an
+	 * OR of alternatives; the schemes within one requirement are ANDed together.
+	 */
+	private fun security(openAPI: OpenAPI, operation: Operation): List<SecurityRequirement>? {
+		// null (field absent at both levels) = unspecified; an empty list = auth explicitly disabled.
+		val requirements = operation.security ?: openAPI.security ?: return null
+		val schemes = openAPI.components?.securitySchemes ?: emptyMap()
+		return requirements.map { requirement ->
+			SecurityRequirement(
+				requirement.map { (name, scopes) ->
+					val scheme = schemes[name]
+					SecurityScheme(
+						name = name,
+						type = scheme?.type?.toString(),
+						detail = scheme?.let(::describeScheme),
+						scopes = scopes ?: emptyList(),
+					)
+				}
+			)
+		}
+	}
+
+	/** Short human-readable summary of a security scheme's mechanism, or null if it carries none. */
+	private fun describeScheme(scheme: OasSecurityScheme): String? = when (scheme.type) {
+		OasSecurityScheme.Type.APIKEY -> "in ${scheme.`in`?.toString() ?: "?"}: ${scheme.name ?: "?"}"
+		OasSecurityScheme.Type.HTTP -> buildString {
+			append(scheme.scheme ?: "http")
+			scheme.bearerFormat?.let { append(" ($it)") }
+		}
+		OasSecurityScheme.Type.OAUTH2 -> {
+			val flows = scheme.flows
+			val names = buildList {
+				if (flows?.implicit != null) add("implicit")
+				if (flows?.password != null) add("password")
+				if (flows?.clientCredentials != null) add("clientCredentials")
+				if (flows?.authorizationCode != null) add("authorizationCode")
+			}
+			if (names.isEmpty()) null else "flows: ${names.joinToString()}"
+		}
+		OasSecurityScheme.Type.OPENIDCONNECT -> scheme.openIdConnectUrl?.let { "discovery: $it" }
+		OasSecurityScheme.Type.MUTUALTLS -> null
+		null -> null
 	}
 
 	/** Merges path-level and operation-level parameters; operation overrides by (name, in). */

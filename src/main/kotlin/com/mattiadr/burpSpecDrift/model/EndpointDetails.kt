@@ -7,6 +7,31 @@ import kotlinx.serialization.Serializable
  * types + an optional text example instead of full JSON Schema trees.
  */
 
+/**
+ * One security scheme the operation can require, resolved against the spec's
+ * `components.securitySchemes`. [type] is the OpenAPI scheme type (http, apiKey, oauth2, …);
+ * [detail] is a short human-readable summary (e.g. "bearer (JWT)", "in header: X-API-Key"),
+ * null when the scheme is only referenced but not defined. [scopes] applies to oauth2 /
+ * openIdConnect, empty otherwise.
+ */
+@Serializable
+data class SecurityScheme(
+	val name: String,
+	val type: String? = null,
+	val detail: String? = null,
+	val scopes: List<String> = emptyList(),
+)
+
+/**
+ * One security requirement: the set of [schemes] that together (AND) satisfy auth. An operation
+ * is authorized when any one of its requirements (OR) is met; an empty requirement list means the
+ * operation declares no auth. See the Auth column (names only) vs. the detail view (full structure).
+ */
+@Serializable
+data class SecurityRequirement(
+	val schemes: List<SecurityScheme> = emptyList(),
+)
+
 /** A request parameter. [location] is path / query / header / cookie. */
 @Serializable
 data class Param(

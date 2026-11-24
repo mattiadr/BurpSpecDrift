@@ -52,7 +52,12 @@ class EndpointTableModel : AbstractTableModel() {
 			COL_BASE -> row.effectiveBase(globalOverride)
 			COL_METHOD -> row.method
 			COL_PATH -> row.path
-			COL_AUTH -> row.security.joinToString(", ")
+			// Blank when auth is unspecified (unknown); "<none>" only when explicitly disabled.
+			COL_AUTH -> when {
+				row.securityRequirements == null -> ""
+				row.securityRequirements!!.isEmpty() -> EndpointFilter.NONE
+				else -> row.security.joinToString(", ")
+			}
 			COL_PROXY_HITS -> row.proxyHits
 			COL_REPEATER_HITS -> row.repeaterHits
 			COL_OTHER_HITS -> row.otherHits

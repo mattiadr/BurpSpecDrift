@@ -42,6 +42,7 @@ class EndpointTablePanel(private val data: SpecTabData) {
 			preferredWidth = 400
 		}
 		columnModel.getColumn(EndpointTableModel.COL_AUTH).apply {
+			cellRenderer = AuthRenderer()
 			minWidth = 60
 			preferredWidth = 120
 		}
@@ -519,6 +520,27 @@ class EndpointTablePanel(private val data: SpecTabData) {
 			foreground = when {
 				isSelected -> table.selectionForeground
 				source == BaseSource.NONE -> Color.GRAY
+				else -> table.foreground
+			}
+			return component
+		}
+	}
+
+	/** Greys the "<none>" marker (auth explicitly disabled); scheme names render normally. */
+	private inner class AuthRenderer : DefaultTableCellRenderer() {
+		override fun getTableCellRendererComponent(
+			table: JTable,
+			value: Any?,
+			isSelected: Boolean,
+			hasFocus: Boolean,
+			row: Int,
+			column: Int,
+		): Component {
+			val component = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column)
+			// Set foreground every time: DefaultTableCellRenderer reuses one component across cells.
+			foreground = when {
+				isSelected -> table.selectionForeground
+				value == EndpointFilter.NONE -> Color.GRAY
 				else -> table.foreground
 			}
 			return component

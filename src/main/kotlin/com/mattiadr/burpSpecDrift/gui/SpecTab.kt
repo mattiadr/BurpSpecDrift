@@ -5,6 +5,7 @@ import com.mattiadr.burpSpecDrift.model.ContentExample
 import com.mattiadr.burpSpecDrift.model.EndpointRow
 import com.mattiadr.burpSpecDrift.model.ImportedSpec
 import com.mattiadr.burpSpecDrift.model.Param
+import com.mattiadr.burpSpecDrift.model.SecurityRequirement
 import com.mattiadr.burpSpecDrift.model.SpecTabData
 import com.mattiadr.burpSpecDrift.spec.openapi.OpenApiImporter
 import com.mattiadr.burpSpecDrift.spec.openapi.OpenApiParseResult
@@ -328,8 +329,13 @@ class SpecTab(val data: SpecTabData) {
 		sb.appendLine("Summary:      ${row.summary ?: "-"}")
 		sb.appendLine("Description:  ${row.description ?: "-"}")
 		sb.appendLine("Deprecated:   ${row.deprecated}")
-		sb.appendLine("Security:     ${row.security.ifEmpty { listOf("-") }.joinToString()}")
 		sb.appendLine("Tags:         ${row.tags.ifEmpty { listOf("-") }.joinToString()}")
+
+		// Only shown when the spec declares security (even if empty); hidden when unspecified.
+		row.securityRequirements?.let {
+			sb.appendLine()
+			appendSecurity(sb, it)
+		}
 
 		sb.appendLine()
 		sb.appendLine("Parameters:")
@@ -364,6 +370,28 @@ class SpecTab(val data: SpecTabData) {
 
 		detailArea.text = sb.toString()
 		detailArea.caretPosition = 0
+	}
+
+	/**
+	 * Appends the auth section: one line per scheme (name, type, resolved detail, scopes), schemes
+	 * within a requirement ANDed, separate requirements marked "OR" (any one satisfies auth).
+	 */
+	private fun appendSecurity(sb: StringBuilder, requirements: List<SecurityRequirement>) {
+		if (requirements.isEmpty()) {
+			sb.appendLine("Security:     <none> (auth explicitly disabled)")
+			return
+		}
+		sb.appendLine("Security:")
+		requirements.forEachIndexed { index, requirement ->
+			if (index > 0) sb.appendLine("  OR")
+			requirement.schemes.forEach { scheme ->
+				sb.append("  - ${scheme.name}")
+				scheme.type?.let { sb.append(" [$it]") }
+				scheme.detail?.let { sb.append(" — $it") }
+				sb.appendLine()
+				if (scheme.scopes.isNotEmpty()) sb.appendLine("      scopes: ${scheme.scopes.joinToString()}")
+			}
+		}
 	}
 
 	/** Appends a media type and, indented below it, its example (if any). */

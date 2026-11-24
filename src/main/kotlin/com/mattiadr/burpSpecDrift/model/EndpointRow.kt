@@ -34,7 +34,12 @@ class EndpointRow(
 	val description: String? = null,
 	val tags: List<String> = emptyList(),
 	val deprecated: Boolean = false,
-	val security: List<String> = emptyList(),
+	/**
+	 * Auth requirements (OR of AND-groups), resolved against the spec's security schemes.
+	 * `null` = not specified by the spec (unknown); empty = auth explicitly disabled (public);
+	 * non-empty = required.
+	 */
+	val securityRequirements: List<SecurityRequirement>? = null,
 	val parameters: List<Param> = emptyList(),
 	val requestBody: Body? = null,
 	val responses: List<ResponseInfo> = emptyList(),
@@ -47,6 +52,9 @@ class EndpointRow(
 	/** Matching requests seen from any other Burp tool. Populated by the diff later. */
 	var otherHits: Int = 0,
 ) {
+	/** Distinct scheme names across all requirements; drives the Auth column and filter. */
+	val security: List<String> get() = securityRequirements.orEmpty().flatMap { it.schemes }.map { it.name }.distinct()
+
 	/** The base this route would use without its own override (global override or spec base). */
 	fun defaultBase(globalOverride: String?): String? = globalOverride ?: specBase
 
