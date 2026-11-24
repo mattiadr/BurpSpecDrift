@@ -92,7 +92,7 @@ class SpecDriftTab {
 	/** Periodically (and on unload) persists hit counts, only when they changed. */
 	private fun startHitsFlush() {
 		Timer(HITS_FLUSH_MS) { flushHits() }.apply { isRepeats = true }.start()
-		AppContext.api.extension().registerUnloadingHandler {
+		AppContext.extension.registerUnloadingHandler {
 			// Pin exact proxy offsets first, then persist counts + offsets as one consistent snapshot.
 			tracker.onUnload()
 			model.tabs.forEach { persistence.saveTab(it) }

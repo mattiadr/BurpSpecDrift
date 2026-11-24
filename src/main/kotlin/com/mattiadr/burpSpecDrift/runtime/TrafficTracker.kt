@@ -47,7 +47,7 @@ class TrafficTracker(private val tabsProvider: () -> List<SpecTabData>) {
 	fun start() {
 		executor.submit {
 			backfill()
-			AppContext.api.http().registerHttpHandler(handler)
+			AppContext.http.registerHttpHandler(handler)
 		}
 	}
 
@@ -80,7 +80,7 @@ class TrafficTracker(private val tabsProvider: () -> List<SpecTabData>) {
 			executor.submit {
 				val loaded = tabsProvider().filter { it.hasLoadedSpec }
 				if (loaded.isNotEmpty()) {
-					val maxId = AppContext.api.proxy().history().lastOrNull()?.id() ?: 0
+					val maxId = AppContext.proxy.history().lastOrNull()?.id() ?: 0
 					loaded.forEach { it.lastProxyId = maxOf(it.lastProxyId, maxId) }
 				}
 			}.get(2, TimeUnit.SECONDS)
@@ -131,7 +131,7 @@ class TrafficTracker(private val tabsProvider: () -> List<SpecTabData>) {
 	private fun backfill() {
 		val loaded = tabsProvider().filter { it.hasLoadedSpec }
 		if (loaded.isEmpty()) return
-		val history = AppContext.api.proxy().history()
+		val history = AppContext.proxy.history()
 		if (history.isEmpty()) return
 
 		val minFrontier = loaded.minOf { it.lastProxyId }

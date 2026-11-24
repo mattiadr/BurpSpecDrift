@@ -59,8 +59,8 @@ class EndpointDetailPanel {
 	private val responsesArea = readOnlyArea()
 
 	// --- Burp raw editors (read-only), reused across selections ---
-	private val requestEditor: RawEditor = AppContext.api.userInterface().createRawEditor(EditorOptions.READ_ONLY)
-	private val responseEditor: RawEditor = AppContext.api.userInterface().createRawEditor(EditorOptions.READ_ONLY)
+	private val requestEditor: RawEditor = AppContext.userInterface.createRawEditor(EditorOptions.READ_ONLY)
+	private val responseEditor: RawEditor = AppContext.userInterface.createRawEditor(EditorOptions.READ_ONLY)
 	/** Picks which request body content the editor shows; repopulated per selection. */
 	private val requestSelector = JComboBox<Choice>().apply {
 		addActionListener { if (!updatingSelector) showSelectedRequest() }

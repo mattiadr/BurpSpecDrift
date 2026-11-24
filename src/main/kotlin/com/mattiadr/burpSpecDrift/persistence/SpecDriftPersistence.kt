@@ -18,7 +18,7 @@ class SpecDriftPersistence {
 		encodeDefaults = true
 	}
 
-	private val root get() = AppContext.api.persistence().extensionData()
+	private val root get() = AppContext.persistence.extensionData()
 
 	/** Rebuilds the tab data from the project file. */
 	fun restore(): List<SpecTabData> {

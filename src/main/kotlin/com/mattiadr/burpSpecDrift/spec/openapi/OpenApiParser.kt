@@ -45,7 +45,7 @@ object OpenApiParser {
 	/** Downloads a spec via Montoya HTTP and parses it. */
 	fun parseUrl(url: String): OpenApiParseResult {
 		val request = HttpRequest.httpRequestFromUrl(url)
-		val response = AppContext.api.http().sendRequest(request).response()
+		val response = AppContext.http.sendRequest(request).response()
 			?: return OpenApiParseResult(null, listOf("No response from $url"))
 
 		if (response.statusCode().toInt() !in 200..299) {

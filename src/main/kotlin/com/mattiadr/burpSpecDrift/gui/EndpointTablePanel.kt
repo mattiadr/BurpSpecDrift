@@ -370,17 +370,17 @@ class EndpointTablePanel(private val data: SpecTabData) {
 
 	private fun sendToRepeater(row: EndpointRow) {
 		val request = buildRequest(row) ?: return
-		AppContext.api.repeater().sendToRepeater(request, "${row.method} ${row.path}")
+		AppContext.repeater.sendToRepeater(request, "${row.method} ${row.path}")
 	}
 
 	private fun sendToIntruder(row: EndpointRow) {
 		val request = buildRequest(row) ?: return
-		AppContext.api.intruder().sendToIntruder(request)
+		AppContext.intruder.sendToIntruder(request)
 	}
 
 	private fun sendToOrganizer(row: EndpointRow) {
 		val request = buildRequest(row) ?: return
-		AppContext.api.organizer().sendToOrganizer(request)
+		AppContext.organizer.sendToOrganizer(request)
 	}
 
 	/** Builds a request from the route's effective base + path; null when no base is known. */
