@@ -103,6 +103,7 @@ class SpecTab(val data: SpecTabData) {
 			override fun changedUpdate(e: DocumentEvent) = tablePanel.setPathSearch(searchField.text)
 		})
 		tablePanel.onRowSelected = { row -> showDetail(row) }
+		tablePanel.preferredMediaTypeProvider = { detailPanel.selectedRequestMediaType() }
 		data.onBasesChanged = { onBasesChanged() }
 		installShortcuts()
 		detailPanel.showSummary(summaryText)

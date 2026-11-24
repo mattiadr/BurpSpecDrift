@@ -97,6 +97,9 @@ class EndpointDetailPanel {
 		}
 	}
 
+	/** The request-body media type currently chosen in the dropdown, or null when there is no body. */
+	fun selectedRequestMediaType(): String? = (requestSelector.selectedItem as? Choice)?.mediaType
+
 	/** Shows the free-text load summary (nothing selected). */
 	fun showSummary(text: String) {
 		summaryArea.text = text
@@ -148,7 +151,7 @@ class EndpointDetailPanel {
 
 		// Rebuild both body pickers; each editor follows its selection, disabled when only one choice.
 		updatingSelector = true
-		val requestChoices = row.requestBody?.contents.orEmpty().map { Choice(it.mediaType, it.example) }
+		val requestChoices = row.requestBody?.contents.orEmpty().map { Choice(it.mediaType, it.example, it.mediaType) }
 		populate(requestSelector, requestChoices, if (row.requestBody == null) "No request body" else "No content")
 		populate(responseSelector, row.responses.map(::buildResponseChoice), "No responses")
 		updatingSelector = false
@@ -283,8 +286,11 @@ class EndpointDetailPanel {
 		preferredSize = Dimension(10, height)
 	}
 
-	/** One entry in a body dropdown: its display label and the example to show (if any). */
-	private class Choice(private val label: String, val example: String?) {
+	/**
+	 * One entry in a body dropdown: its display label and the example to show (if any). [mediaType] is
+	 * set only for request-body choices, so the send logic can honor the dropdown selection.
+	 */
+	private class Choice(private val label: String, val example: String?, val mediaType: String? = null) {
 		override fun toString(): String = label
 	}
 
