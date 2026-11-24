@@ -1,11 +1,8 @@
 package com.mattiadr.burpSpecDrift.gui
 
 import com.mattiadr.burpSpecDrift.core.AppContext
-import com.mattiadr.burpSpecDrift.model.ContentExample
 import com.mattiadr.burpSpecDrift.model.EndpointRow
 import com.mattiadr.burpSpecDrift.model.ImportedSpec
-import com.mattiadr.burpSpecDrift.model.Param
-import com.mattiadr.burpSpecDrift.model.SecurityRequirement
 import com.mattiadr.burpSpecDrift.model.SpecTabData
 import com.mattiadr.burpSpecDrift.spec.openapi.OpenApiImporter
 import com.mattiadr.burpSpecDrift.spec.openapi.OpenApiParseResult
@@ -26,9 +23,7 @@ import javax.swing.JFileChooser
 import javax.swing.JLabel
 import javax.swing.JOptionPane
 import javax.swing.JPanel
-import javax.swing.JScrollPane
 import javax.swing.JSplitPane
-import javax.swing.JTextArea
 import javax.swing.SwingConstants
 import javax.swing.SwingUtilities
 import javax.swing.UIManager
@@ -62,9 +57,7 @@ class SpecTab(val data: SpecTabData) {
 	private val baseOverrideToggle = PopupToggle<Unit>()
 
 	private val tablePanel = EndpointTablePanel(data)
-	private val detailArea = JTextArea(6, 60).apply {
-		isEditable = false
-	}
+	private val detailPanel = EndpointDetailPanel()
 
 	/** Summary shown in the detail pane when no row is selected. */
 	private var summaryText: String = "No spec loaded."
@@ -74,7 +67,7 @@ class SpecTab(val data: SpecTabData) {
 		val split = JSplitPane(
 			JSplitPane.VERTICAL_SPLIT,
 			tablePanel.component,
-			JScrollPane(detailArea),
+			detailPanel.component,
 		).apply {
 			resizeWeight = 0.5
 			// Place the divider at 50% once the split pane first gets a real size (a fractional
@@ -105,7 +98,7 @@ class SpecTab(val data: SpecTabData) {
 		})
 		tablePanel.onRowSelected = { row -> showDetail(row) }
 		data.onBasesChanged = { onBasesChanged() }
-		detailArea.text = summaryText
+		detailPanel.showSummary(summaryText)
 		updateBaseOverrideButton()
 		if (data.hasLoadedSpec) renderRestored()
 	}
@@ -335,105 +328,13 @@ class SpecTab(val data: SpecTabData) {
 
 	/** Shows either the selected endpoint's detail, or the load summary when nothing is selected. */
 	private fun showDetail(row: EndpointRow?) {
-		if (row == null) {
-			detailArea.text = summaryText
-			return
-		}
-		val sb = StringBuilder()
-		sb.appendLine("Method:       ${row.method}")
-		sb.appendLine("Route:        ${row.route(data.baseOverride)}")
-		sb.appendLine("Path:         ${row.path}")
-		sb.appendLine("Base:         ${row.effectiveBase(data.baseOverride) ?: "<none>"}")
-		if (row.alternativeBases.isNotEmpty()) {
-			sb.appendLine("Other bases:  ${row.alternativeBases.joinToString()}")
-		}
-		sb.appendLine("OperationId:  ${row.operationId ?: "-"}")
-		sb.appendLine("Summary:      ${row.summary ?: "-"}")
-		sb.appendLine("Description:  ${row.description ?: "-"}")
-		sb.appendLine("Deprecated:   ${row.deprecated}")
-		sb.appendLine("Tags:         ${row.tags.ifEmpty { listOf("-") }.joinToString()}")
-
-		// Only shown when the spec declares security (even if empty); hidden when unspecified.
-		row.securityRequirements?.let {
-			sb.appendLine()
-			appendSecurity(sb, it)
-		}
-
-		sb.appendLine()
-		sb.appendLine("Parameters:")
-		if (row.parameters.isEmpty()) {
-			sb.appendLine("  -")
-		} else {
-			row.parameters.forEach { sb.appendLine("  ${formatParam(it)}") }
-		}
-
-		sb.appendLine()
-		val body = row.requestBody
-		if (body == null) {
-			sb.appendLine("Request body: -")
-		} else {
-			sb.appendLine("Request body: ${if (body.required) "required" else "optional"}")
-			if (body.contents.isEmpty()) sb.appendLine("  -")
-			else body.contents.forEach { appendContent(sb, it) }
-		}
-
-		sb.appendLine()
-		sb.appendLine("Responses:")
-		if (row.responses.isEmpty()) {
-			sb.appendLine("  -")
-		} else {
-			row.responses.forEach { response ->
-				sb.append("  - ${response.statusCode}")
-				response.description?.let { sb.append(": $it") }
-				sb.appendLine()
-				response.contents.forEach { appendContent(sb, it) }
-			}
-		}
-
-		detailArea.text = sb.toString()
-		detailArea.caretPosition = 0
-	}
-
-	/**
-	 * Appends the auth section: one line per scheme (name, type, resolved detail, scopes), schemes
-	 * within a requirement ANDed, separate requirements marked "OR" (any one satisfies auth).
-	 */
-	private fun appendSecurity(sb: StringBuilder, requirements: List<SecurityRequirement>) {
-		if (requirements.isEmpty()) {
-			sb.appendLine("Security:     <none> (auth explicitly disabled)")
-			return
-		}
-		sb.appendLine("Security:")
-		requirements.forEachIndexed { index, requirement ->
-			if (index > 0) sb.appendLine("  OR")
-			requirement.schemes.forEach { scheme ->
-				sb.append("  - ${scheme.name}")
-				scheme.type?.let { sb.append(" [$it]") }
-				scheme.detail?.let { sb.append(" — $it") }
-				sb.appendLine()
-				if (scheme.scopes.isNotEmpty()) sb.appendLine("      scopes: ${scheme.scopes.joinToString()}")
-			}
-		}
-	}
-
-	/** Appends a media type and, indented below it, its example (if any). */
-	private fun appendContent(sb: StringBuilder, content: ContentExample) {
-		sb.appendLine("    ${content.mediaType}")
-		content.example?.lineSequence()?.forEach { line -> sb.appendLine("      $line") }
-	}
-
-	private fun formatParam(param: Param): String = buildString {
-		append("- ${param.name} (${param.location}")
-		if (param.required) append(", required")
-		append(")")
-		param.type?.let { append(": $it") }
-		param.description?.let { append(" — $it") }
-		param.example?.let { append(" [example: $it]") }
+		if (row == null) detailPanel.showSummary(summaryText)
+		else detailPanel.showEndpoint(row, data.baseOverride)
 	}
 
 	private fun setSummary(text: String) {
 		summaryText = text
-		detailArea.text = text
+		detailPanel.showSummary(text)
 	}
 
 	private fun setButtonsEnabled(enabled: Boolean) {
