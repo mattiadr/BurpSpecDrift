@@ -1,5 +1,6 @@
 package com.mattiadr.burpSpecDrift.gui
 
+import burp.api.montoya.http.message.params.HttpParameter
 import burp.api.montoya.http.message.requests.HttpRequest
 import com.mattiadr.burpSpecDrift.core.AppContext
 import com.mattiadr.burpSpecDrift.model.BaseSource
@@ -383,16 +384,50 @@ class EndpointTablePanel(private val data: SpecTabData) {
 		AppContext.organizer.sendToOrganizer(request)
 	}
 
-	/** Builds a request from the route's effective base + path; null when no base is known. */
+	/**
+	 * Builds a request from the route, filling in parameters and the request body (always included,
+	 * even when optional). Path params are substituted into the path; query/cookie params are added
+	 * as Burp parameters; header params become headers; the first declared body content is sent with
+	 * its Content-Type. Returns null when no base is known.
+	 */
 	private fun buildRequest(row: EndpointRow): HttpRequest? {
 		val base = row.effectiveBase(model.globalOverride) ?: return null
 		return try {
-			HttpRequest.httpRequestFromUrl(base.trimEnd('/') + row.path).withMethod(row.method)
+			var path = row.path
+			row.parameters.filter { it.location == "path" }.forEach { param ->
+				path = path.replace("{${param.name}}", encodePath(param.example))
+			}
+
+			var request = HttpRequest.httpRequestFromUrl(base.trimEnd('/') + path).withMethod(row.method)
+
+			val params = row.parameters.mapNotNull { param ->
+				when (param.location) {
+					"query" -> HttpParameter.urlParameter(param.name, param.example)
+					"cookie" -> HttpParameter.cookieParameter(param.name, param.example)
+					else -> null
+				}
+			}
+			if (params.isNotEmpty()) request = request.withAddedParameters(params)
+
+			row.parameters.filter { it.location == "header" }.forEach { param ->
+				request = request.withAddedHeader(param.name, param.example)
+			}
+
+			row.requestBody?.contents?.firstOrNull()?.let { content ->
+				request = request.withBody(content.example ?: "")
+					.withUpdatedHeader("Content-Type", content.mediaType)
+			}
+
+			request
 		} catch (e: Exception) {
 			AppContext.logging.logToError("[SpecDrift] Cannot build request for ${row.method} ${row.path}: ${e.message}")
 			null
 		}
 	}
+
+	/** Percent-encodes a value for safe insertion into a URL path segment. */
+	private fun encodePath(value: String): String =
+		java.net.URLEncoder.encode(value, Charsets.UTF_8).replace("+", "%20")
 
 	companion object {
 		/** Minimum text width (px) of the context menu items, giving the menu a minimum width. */

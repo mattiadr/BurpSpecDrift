@@ -260,7 +260,6 @@ class EndpointDetailPanel {
 		append(')')
 		param.type?.let { append(": ").append(it) }
 		param.description?.let { append(" — ").append(it) }
-		param.example?.let { append(" [example: ").append(it).append(']') }
 	}
 
 	private fun bytes(text: String?): MontoyaByteArray = MontoyaByteArray.byteArray(text ?: "")

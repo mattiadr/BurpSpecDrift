@@ -40,7 +40,8 @@ data class Param(
 	val required: Boolean,
 	val type: String? = null,
 	val description: String? = null,
-	val example: String? = null,
+	/** The value sent when this parameter is used; resolved from the spec at import time. */
+	val example: String = "",
 )
 
 /** One accepted/returned media type and its optional text example. */

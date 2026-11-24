@@ -17,6 +17,37 @@ object OpenApiSchemaExampleGenerator {
 		return runCatching { Json.pretty(value) }.getOrNull()
 	}
 
+	/**
+	 * Returns a single **scalar** sample for [schema] (not JSON) — for a parameter value: the
+	 * declared example/default, the first enum option, a sample for a known string format, or a
+	 * type default. Returns null when the schema carries no usable scalar hint (a bare string with
+	 * no format, an object/array, or an unknown type), leaving the caller to pick a placeholder.
+	 */
+	fun generateScalar(schema: Schema<*>?, openAPI: OpenAPI): String? = scalar(schema, openAPI, HashSet())
+
+	private fun scalar(schema: Schema<*>?, openAPI: OpenAPI, seen: MutableSet<String>): String? {
+		if (schema == null) return null
+
+		schema.`$ref`?.let { ref ->
+			val name = ref.substringAfterLast('/')
+			if (!seen.add(name)) return null // cycle
+			val resolved = scalar(openAPI.components?.schemas?.get(name), openAPI, seen)
+			seen.remove(name)
+			return resolved
+		}
+
+		schema.example?.let { return it.toString() }
+		schema.default?.let { return it.toString() }
+		schema.getEnum()?.firstOrNull()?.let { return it.toString() }
+
+		return when (schema.type ?: schema.types?.firstOrNull()) {
+			"integer", "number" -> "0"
+			"boolean" -> "true"
+			"string" -> knownFormatSample(schema.format) // null for a bare/unknown format
+			else -> null
+		}
+	}
+
 	private fun build(schema: Schema<*>?, openAPI: OpenAPI, seen: MutableSet<String>): Any? {
 		if (schema == null) return null
 
@@ -54,12 +85,15 @@ object OpenApiSchemaExampleGenerator {
 		}
 	}
 
-	private fun stringSample(format: String?): String = when (format) {
+	private fun stringSample(format: String?): String = knownFormatSample(format) ?: "string"
+
+	/** Sample for a recognized string [format], or null for an absent/unknown one. */
+	private fun knownFormatSample(format: String?): String? = when (format) {
 		"date" -> "2020-01-01"
 		"date-time" -> "2020-01-01T00:00:00Z"
 		"uuid" -> "00000000-0000-0000-0000-000000000000"
 		"email" -> "user@example.com"
 		"byte" -> "U3dhZ2dlcg=="
-		else -> "string"
+		else -> null
 	}
 }

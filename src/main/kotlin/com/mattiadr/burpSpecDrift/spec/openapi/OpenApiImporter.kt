@@ -54,7 +54,7 @@ object OpenApiImporter {
 					tags = operation.tags ?: emptyList(),
 					deprecated = operation.deprecated == true,
 					securityRequirements = security(openAPI, operation),
-					parameters = parameters(item.parameters, operation.parameters),
+					parameters = parameters(item.parameters, operation.parameters, openAPI),
 					requestBody = requestBody(operation.requestBody, openAPI),
 					responses = responses(operation, openAPI),
 				)
@@ -110,7 +110,7 @@ object OpenApiImporter {
 	}
 
 	/** Merges path-level and operation-level parameters; operation overrides by (name, in). */
-	private fun parameters(pathParams: List<OasParameter>?, opParams: List<OasParameter>?): List<Param> {
+	private fun parameters(pathParams: List<OasParameter>?, opParams: List<OasParameter>?, openAPI: OpenAPI): List<Param> {
 		val merged = LinkedHashMap<String, OasParameter>()
 		(pathParams.orEmpty() + opParams.orEmpty()).forEach { merged["${it.name}:${it.`in`}"] = it }
 		return merged.values.map { param ->
@@ -120,9 +120,23 @@ object OpenApiImporter {
 				required = param.required == true,
 				type = param.schema?.type,
 				description = param.description,
-				example = (param.example ?: param.schema?.example)?.toString(),
+				example = paramExample(param, openAPI),
 			)
 		}
+	}
+
+	/**
+	 * The value to send for a parameter, resolved from the spec by priority: a parameter-level
+	 * example, a named example, then the schema (example/default/enum/format/type default via
+	 * [OpenApiSchemaExampleGenerator.generateScalar]). Falls back to the type name as a placeholder,
+	 * except an optional string with no hint uses "optional" so it reads as clearly removable.
+	 */
+	private fun paramExample(param: OasParameter, openAPI: OpenAPI): String {
+		param.example?.let { return it.toString() }
+		param.examples?.values?.firstOrNull()?.value?.let { return it.toString() }
+		OpenApiSchemaExampleGenerator.generateScalar(param.schema, openAPI)?.let { return it }
+		val type = param.schema?.type ?: "string"
+		return if (type == "string" && param.required != true) "optional" else type
 	}
 
 	private fun requestBody(body: RequestBody?, openAPI: OpenAPI): Body? {
