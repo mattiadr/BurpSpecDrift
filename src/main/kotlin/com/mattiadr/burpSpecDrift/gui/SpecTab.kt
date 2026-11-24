@@ -21,7 +21,6 @@ import javax.swing.event.DocumentEvent
 import javax.swing.event.DocumentListener
 import javax.swing.Box
 import javax.swing.BorderFactory
-import javax.swing.BoxLayout
 import javax.swing.JButton
 import javax.swing.JFileChooser
 import javax.swing.JLabel
@@ -55,6 +54,9 @@ class SpecTab(val data: SpecTabData) {
 		toolTipText = "Reset and recompute proxy hits from the proxy history"
 	}
 	private val searchField = HintTextField(20).apply { hint = "Search path" }
+	private val resetFiltersButton = JButton("Reset").apply {
+		toolTipText = "Clear every column filter and the path search"
+	}
 
 	/** Toggle state for the global base-override dropdown, so re-clicking the button closes it. */
 	private val baseOverrideToggle = PopupToggle<Unit>()
@@ -92,9 +94,10 @@ class SpecTab(val data: SpecTabData) {
 		loadFileButton.addActionListener { onLoadFile() }
 		baseOverrideButton.addActionListener { openBaseOverridePopup() }
 		recalcButton.addActionListener { onRecalcClicked() }
+		resetFiltersButton.addActionListener { resetFilters() }
 		configureBaseOverrideButton()
-		capWidthToPreferred(urlField)
-		capWidthToPreferred(searchField)
+		fixFieldWidth(urlField)
+		fixFieldWidth(searchField)
 		searchField.document.addDocumentListener(object : DocumentListener {
 			override fun insertUpdate(e: DocumentEvent) = tablePanel.setPathSearch(searchField.text)
 			override fun removeUpdate(e: DocumentEvent) = tablePanel.setPathSearch(searchField.text)
@@ -171,27 +174,46 @@ class SpecTab(val data: SpecTabData) {
 		tablePanel.setGlobalOverride(value)
 	}
 
-	private fun capWidthToPreferred(component: Component) {
+	/** Pins a text field to its preferred width, giving it a fixed minimum so it never collapses. */
+	private fun fixFieldWidth(component: Component) {
+		component.minimumSize = component.preferredSize
 		component.maximumSize = component.preferredSize
 	}
 
-	private fun buildToolbar(): JPanel = JPanel().apply {
-		layout = BoxLayout(this, BoxLayout.X_AXIS)
-		border = BorderFactory.createEmptyBorder(6, 8, 6, 8)
-		add(JLabel("Spec URL: "))
-		add(urlField)
-		add(Box.createHorizontalStrut(4))
-		add(loadUrlButton)
-		add(Box.createHorizontalStrut(4))
-		add(loadFileButton)
-		add(Box.createHorizontalStrut(24))
-		add(JLabel("Base Override: "))
-		add(baseOverrideButton)
-		add(Box.createHorizontalStrut(4))
-		add(recalcButton)
-		add(Box.createHorizontalGlue())
-		add(JLabel("Search: "))
-		add(searchField)
+	/** Clears both the per-column filters and the path search (the latter via the search field). */
+	private fun resetFilters() {
+		searchField.text = ""   // fires the document listener, which resets the path search
+		tablePanel.clearColumnFilters()
+	}
+
+	private fun buildToolbar(): JPanel {
+		// Left group: wraps onto new rows when the window is too narrow (hgap 0 so the explicit
+		// struts control spacing; vgap 4 separates wrapped rows).
+		val leftGroup = JPanel(WrapLayout(hgap = 0, vgap = 4)).apply {
+			add(JLabel("Spec URL: "))
+			add(urlField)
+			add(Box.createHorizontalStrut(4))
+			add(loadUrlButton)
+			add(Box.createHorizontalStrut(4))
+			add(loadFileButton)
+			add(Box.createHorizontalStrut(24))
+			add(JLabel("Base Override: "))
+			add(baseOverrideButton)
+			add(Box.createHorizontalStrut(4))
+			add(recalcButton)
+		}
+		// Right group: Search + Reset, kept pinned to the right edge while the left group wraps below.
+		val rightGroup = JPanel(WrapLayout(hgap = 0, vgap = 4)).apply {
+			add(JLabel("Search: "))
+			add(searchField)
+			add(Box.createHorizontalStrut(4))
+			add(resetFiltersButton)
+		}
+		return JPanel(BorderLayout()).apply {
+			border = BorderFactory.createEmptyBorder(6, 8, 6, 8)
+			add(leftGroup, BorderLayout.CENTER)
+			add(rightGroup, BorderLayout.EAST)
+		}
 	}
 
 	private fun onLoadUrl() {

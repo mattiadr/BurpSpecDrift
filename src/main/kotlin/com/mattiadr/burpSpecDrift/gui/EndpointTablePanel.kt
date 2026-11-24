@@ -169,6 +169,11 @@ class EndpointTablePanel(private val data: SpecTabData) {
 		if (activeFilter.isActive) applyFilter(EndpointFilter())
 	}
 
+	/** Resets every per-column header filter (the path search is cleared separately by the caller). */
+	fun clearColumnFilters() {
+		if (activeFilter.isActive) applyFilter(EndpointFilter())
+	}
+
 	/** Sets the tab-level override so the Base column reflects it (and restyles). */
 	fun setGlobalOverride(value: String?) {
 		model.globalOverride = value
@@ -527,7 +532,7 @@ class EndpointTablePanel(private val data: SpecTabData) {
 	}
 
 	/** Greys the "<none>" marker (auth explicitly disabled); scheme names render normally. */
-	private inner class AuthRenderer : DefaultTableCellRenderer() {
+	private class AuthRenderer : DefaultTableCellRenderer() {
 		override fun getTableCellRendererComponent(
 			table: JTable,
 			value: Any?,
