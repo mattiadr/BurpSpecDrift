@@ -44,11 +44,16 @@ data class Param(
 	val example: String = "",
 )
 
-/** One accepted/returned media type and its optional text example. */
+/**
+ * One accepted/returned media type and its optional text example. [name] distinguishes several
+ * examples that share a media type (e.g. collapsed Postman/Bruno requests), shown in the body
+ * dropdown; null for OpenAPI, where each media type is unique within a body.
+ */
 @Serializable
 data class ContentExample(
 	val mediaType: String,
 	val example: String? = null,
+	val name: String? = null,
 )
 
 /** A request body: whether required and the accepted contents (media type + example). */

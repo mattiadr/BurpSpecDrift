@@ -68,10 +68,10 @@ class EndpointTablePanel(private val data: SpecTabData) {
 	var onRowSelected: ((EndpointRow?) -> Unit)? = null
 
 	/**
-	 * Supplies the request-body media type chosen in the detail view. Honored only when a single row
-	 * is selected (the detail view shows exactly that row); a batch send falls back to the first body.
+	 * Supplies the request-body example index chosen in the detail view. Honored only when a single
+	 * row is selected (the detail view shows exactly that row); a batch send falls back to the first body.
 	 */
-	var preferredMediaTypeProvider: (() -> String?)? = null
+	var selectedBodyIndexProvider: (() -> Int?)? = null
 
 	/** The columns whose header carries a filter funnel (everything except the free-text Path). */
 	private val filterableColumns = setOf(
@@ -151,13 +151,13 @@ class EndpointTablePanel(private val data: SpecTabData) {
 	}
 
 	/** Sends every selected route to Repeater. Bound to Ctrl+R by the owning [SpecTab]. */
-	fun sendSelectedToRepeater() = selectedRoutes().let { routes -> routes.forEach { sendToRepeater(it, preferredMediaType(routes)) } }
+	fun sendSelectedToRepeater() = selectedRoutes().let { routes -> routes.forEach { sendToRepeater(it, selectedBodyIndex(routes)) } }
 
 	/** Sends every selected route to Intruder. Bound to Ctrl+I by the owning [SpecTab]. */
-	fun sendSelectedToIntruder() = selectedRoutes().let { routes -> routes.forEach { sendToIntruder(it, preferredMediaType(routes)) } }
+	fun sendSelectedToIntruder() = selectedRoutes().let { routes -> routes.forEach { sendToIntruder(it, selectedBodyIndex(routes)) } }
 
 	/** Sends every selected route to Organizer. Bound to Ctrl+O by the owning [SpecTab]. */
-	fun sendSelectedToOrganizer() = selectedRoutes().let { routes -> routes.forEach { sendToOrganizer(it, preferredMediaType(routes)) } }
+	fun sendSelectedToOrganizer() = selectedRoutes().let { routes -> routes.forEach { sendToOrganizer(it, selectedBodyIndex(routes)) } }
 
 	fun setRows(rows: List<EndpointRow>) {
 		table.clearSelection()
@@ -341,10 +341,10 @@ class EndpointTablePanel(private val data: SpecTabData) {
 		)
 		menu.add(withMinWidth(overrideMenu))
 		menu.addSeparator()
-		val preferred = preferredMediaType(routes)
-		menu.add(sendItem("Send to Repeater", "Ctrl+R") { routes.forEach { sendToRepeater(it, preferred) } })
-		menu.add(sendItem("Send to Intruder", "Ctrl+I") { routes.forEach { sendToIntruder(it, preferred) } })
-		menu.add(sendItem("Send to Organizer", "Ctrl+O") { routes.forEach { sendToOrganizer(it, preferred) } })
+		val bodyIndex = selectedBodyIndex(routes)
+		menu.add(sendItem("Send to Repeater", "Ctrl+R") { routes.forEach { sendToRepeater(it, bodyIndex) } })
+		menu.add(sendItem("Send to Intruder", "Ctrl+I") { routes.forEach { sendToIntruder(it, bodyIndex) } })
+		menu.add(sendItem("Send to Organizer", "Ctrl+O") { routes.forEach { sendToOrganizer(it, bodyIndex) } })
 
 		menu.show(table, event.x, event.y)
 	}
@@ -377,35 +377,35 @@ class EndpointTablePanel(private val data: SpecTabData) {
 		table.selectedRows.map { model.rowAt(table.convertRowIndexToModel(it)) }
 
 	/**
-	 * The request-body media type to send: the detail view's dropdown selection, but only for a
+	 * The request-body example index to send: the detail view's dropdown selection, but only for a
 	 * single-row send (the detail shows exactly that row). A batch send gets null (first body).
 	 */
-	private fun preferredMediaType(routes: List<EndpointRow>): String? =
-		if (routes.size == 1) preferredMediaTypeProvider?.invoke() else null
+	private fun selectedBodyIndex(routes: List<EndpointRow>): Int? =
+		if (routes.size == 1) selectedBodyIndexProvider?.invoke() else null
 
-	private fun sendToRepeater(row: EndpointRow, preferredMediaType: String?) {
-		val request = buildRequest(row, preferredMediaType) ?: return
+	private fun sendToRepeater(row: EndpointRow, bodyIndex: Int?) {
+		val request = buildRequest(row, bodyIndex) ?: return
 		AppContext.repeater.sendToRepeater(request, "${row.method} ${row.path}")
 	}
 
-	private fun sendToIntruder(row: EndpointRow, preferredMediaType: String?) {
-		val request = buildRequest(row, preferredMediaType) ?: return
+	private fun sendToIntruder(row: EndpointRow, bodyIndex: Int?) {
+		val request = buildRequest(row, bodyIndex) ?: return
 		AppContext.intruder.sendToIntruder(request)
 	}
 
-	private fun sendToOrganizer(row: EndpointRow, preferredMediaType: String?) {
-		val request = buildRequest(row, preferredMediaType) ?: return
+	private fun sendToOrganizer(row: EndpointRow, bodyIndex: Int?) {
+		val request = buildRequest(row, bodyIndex) ?: return
 		AppContext.organizer.sendToOrganizer(request)
 	}
 
 	/**
 	 * Builds a request from the route, filling in parameters and the request body (always included,
 	 * even when optional). Path params are substituted into the path; query/cookie params are added
-	 * as Burp parameters; header params become headers. The body content sent is the one matching
-	 * [preferredMediaType] (the detail view's dropdown), falling back to the first declared content;
+	 * as Burp parameters; header params become headers. The body content sent is the one at
+	 * [bodyIndex] (the detail view's dropdown selection), falling back to the first declared content;
 	 * its media type becomes the Content-Type. Returns null when no base is known.
 	 */
-	private fun buildRequest(row: EndpointRow, preferredMediaType: String?): HttpRequest? {
+	private fun buildRequest(row: EndpointRow, bodyIndex: Int?): HttpRequest? {
 		val base = row.effectiveBase(model.globalOverride) ?: return null
 		return try {
 			var path = row.path
@@ -429,7 +429,7 @@ class EndpointTablePanel(private val data: SpecTabData) {
 			}
 
 			row.requestBody?.contents?.let { contents ->
-				preferredMediaType?.let { pref -> contents.firstOrNull { it.mediaType == pref } } ?: contents.firstOrNull()
+				bodyIndex?.let { contents.getOrNull(it) } ?: contents.firstOrNull()
 			}?.let { content ->
 				request = request.withBody(content.example ?: "")
 					.withHeader("Content-Type", content.mediaType)

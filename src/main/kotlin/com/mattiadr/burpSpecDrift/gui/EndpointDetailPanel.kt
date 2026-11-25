@@ -4,6 +4,7 @@ import burp.api.montoya.core.ByteArray as MontoyaByteArray
 import burp.api.montoya.ui.editor.EditorOptions
 import burp.api.montoya.ui.editor.RawEditor
 import com.mattiadr.burpSpecDrift.core.AppContext
+import com.mattiadr.burpSpecDrift.model.ContentExample
 import com.mattiadr.burpSpecDrift.model.EndpointRow
 import com.mattiadr.burpSpecDrift.model.Param
 import com.mattiadr.burpSpecDrift.model.ResponseInfo
@@ -97,8 +98,15 @@ class EndpointDetailPanel {
 		}
 	}
 
-	/** The request-body media type currently chosen in the dropdown, or null when there is no body. */
-	fun selectedRequestMediaType(): String? = (requestSelector.selectedItem as? Choice)?.mediaType
+	/**
+	 * The index of the request-body example chosen in the dropdown (into `requestBody.contents`), or
+	 * null when there is no body. Index-based (not media type) because a collection row can hold
+	 * several examples sharing one media type.
+	 */
+	fun selectedRequestIndex(): Int? {
+		val choice = requestSelector.selectedItem as? Choice ?: return null
+		return if (choice.expectsBody) choice.contentIndex else null
+	}
 
 	/** Shows the free-text load summary (nothing selected). */
 	fun showSummary(text: String) {
@@ -151,7 +159,9 @@ class EndpointDetailPanel {
 
 		// Rebuild both body pickers; each editor follows its selection, disabled when only one choice.
 		updatingSelector = true
-		val requestChoices = row.requestBody?.contents.orEmpty().map { Choice(it.mediaType, it.example, it.mediaType, expectsBody = true) }
+		val requestChoices = row.requestBody?.contents.orEmpty().mapIndexed { index, content ->
+			Choice(contentLabel(content), content.example, expectsBody = true, contentIndex = index)
+		}
 		populate(requestSelector, requestChoices, if (row.requestBody == null) "No request body" else "No content")
 		populate(responseSelector, row.responses.map(::buildResponseChoice), "No responses")
 		updatingSelector = false
@@ -177,6 +187,10 @@ class EndpointDetailPanel {
 	private fun showSelectedResponse() {
 		responseEditor.contents = editorBytes(responseSelector.selectedItem as? Choice)
 	}
+
+	/** Dropdown label for a request-body content: its media type, suffixed with the example name if any. */
+	private fun contentLabel(content: ContentExample): String =
+		content.name?.let { "${content.mediaType} — $it" } ?: content.mediaType
 
 	private fun buildResponseChoice(response: ResponseInfo): Choice {
 		val withExample = response.contents.firstOrNull { it.example != null }
@@ -295,16 +309,17 @@ class EndpointDetailPanel {
 	}
 
 	/**
-	 * One entry in a body dropdown: its display label and the example to show (if any). [mediaType] is
-	 * set only for request-body choices, so the send logic can honor the dropdown selection.
-	 * [expectsBody] is true when a body is declared for this choice, so a missing example shows the
-	 * "no example" placeholder rather than an empty editor (which is right when no body is expected).
+	 * One entry in a body dropdown: its display label and the example to show (if any). [expectsBody]
+	 * is true when a body is declared for this choice, so a missing example shows the "no example"
+	 * placeholder rather than an empty editor (which is right when no body is expected). [contentIndex]
+	 * is this choice's position in `requestBody.contents` (−1 when not a request body); the send path
+	 * selects by it rather than by the combo's display index, so reordering the dropdown can't misroute.
 	 */
 	private class Choice(
 		private val label: String,
 		val example: String?,
-		val mediaType: String? = null,
 		val expectsBody: Boolean = false,
+		val contentIndex: Int = -1,
 	) {
 		override fun toString(): String = label
 	}
