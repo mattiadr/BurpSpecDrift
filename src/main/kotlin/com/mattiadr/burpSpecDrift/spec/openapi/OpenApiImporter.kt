@@ -29,7 +29,7 @@ object OpenApiImporter {
 	fun extract(openAPI: OpenAPI): ImportedSpec = ImportedSpec(
 		title = openAPI.info?.title,
 		version = openAPI.info?.version,
-		openApiVersion = openAPI.openapi,
+		format = openAPI.openapi?.let { "OpenAPI $it" } ?: "OpenAPI",
 		endpoints = extractEndpoints(openAPI),
 	)
 

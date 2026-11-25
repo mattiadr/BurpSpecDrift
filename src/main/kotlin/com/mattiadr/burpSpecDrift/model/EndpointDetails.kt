@@ -8,11 +8,10 @@ import kotlinx.serialization.Serializable
  */
 
 /**
- * One security scheme the operation can require, resolved against the spec's
- * `components.securitySchemes`. [type] is the OpenAPI scheme type (http, apiKey, oauth2, …);
- * [detail] is a short human-readable summary (e.g. "bearer (JWT)", "in header: X-API-Key"),
- * null when the scheme is only referenced but not defined. [scopes] applies to oauth2 /
- * openIdConnect, empty otherwise.
+ * One security scheme the operation can require. [type] is the auth scheme type (http, apiKey,
+ * oauth2, …); [detail] is a short human-readable summary (e.g. "bearer (JWT)", "in header:
+ * X-API-Key"), null when the scheme is only referenced but not defined. [scopes] applies to
+ * oauth2 / openIdConnect, empty otherwise.
  */
 @Serializable
 data class SecurityScheme(
@@ -47,7 +46,7 @@ data class Param(
 /**
  * One accepted/returned media type and its optional text example. [name] distinguishes several
  * examples that share a media type (e.g. collapsed Postman/Bruno requests), shown in the body
- * dropdown; null for OpenAPI, where each media type is unique within a body.
+ * dropdown; null when the media type alone identifies the example (one example per media type).
  */
 @Serializable
 data class ContentExample(

@@ -93,7 +93,7 @@ object RouteMatcher {
 		return route.pathRegex.matches(relative)
 	}
 
-	/** Turns an OpenAPI path template into an anchored regex (`{param}` -> one path segment). */
+	/** Turns a `{param}` path template (the canonical internal form) into an anchored regex (one segment per `{param}`). */
 	fun templateToRegex(path: String): Regex {
 		val sb = StringBuilder("^")
 		val literal = StringBuilder()

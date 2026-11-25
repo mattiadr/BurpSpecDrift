@@ -10,7 +10,8 @@ import kotlinx.serialization.Serializable
 data class ImportedSpec(
 	val title: String? = null,
 	val version: String? = null,
-	val openApiVersion: String? = null,
+	/** Human-readable source format label for the summary, e.g. "OpenAPI 3.1.0" / "Postman 2.1.0". */
+	val format: String? = null,
 	val endpoints: List<EndpointRow> = emptyList(),
 )
 

@@ -4,9 +4,8 @@ import com.mattiadr.burpSpecDrift.core.AppContext
 import com.mattiadr.burpSpecDrift.model.EndpointRow
 import com.mattiadr.burpSpecDrift.model.ImportedSpec
 import com.mattiadr.burpSpecDrift.model.SpecTabData
-import com.mattiadr.burpSpecDrift.spec.openapi.OpenApiImporter
-import com.mattiadr.burpSpecDrift.spec.openapi.OpenApiParseResult
-import com.mattiadr.burpSpecDrift.spec.openapi.OpenApiParser
+import com.mattiadr.burpSpecDrift.spec.SpecImportResult
+import com.mattiadr.burpSpecDrift.spec.SpecImporter
 import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.Component
@@ -245,7 +244,7 @@ class SpecTab(val data: SpecTabData) {
 			setSummary("Enter a URL.")
 			return
 		}
-		loadAsync("URL: $url") { OpenApiParser.parseUrl(url) }
+		loadAsync("URL: $url") { SpecImporter.importUrl(url) }
 	}
 
 	private fun onLoadFile() {
@@ -254,7 +253,7 @@ class SpecTab(val data: SpecTabData) {
 		if (chooser.showOpenDialog(component) != JFileChooser.APPROVE_OPTION) return
 		lastDirectory = chooser.currentDirectory
 		val path = chooser.selectedFile.toPath()
-		if (loadAsync("File: $path") { OpenApiParser.parseFile(path) }) {
+		if (loadAsync("File: $path") { SpecImporter.importFile(path) }) {
 			// Show the loaded file as a muted hint and free the URL field.
 			urlField.text = ""
 			urlField.hint = path.toString()
@@ -268,14 +267,14 @@ class SpecTab(val data: SpecTabData) {
 
 	/** Loads a spec from already-retrieved content (e.g. a response body sent from Burp). */
 	fun loadFromString(content: String) {
-		loadAsync("Sent from Burp") { OpenApiParser.parseContent(content) }
+		loadAsync("Sent from Burp") { SpecImporter.importContent(content) }
 	}
 
 	/**
 	 * Runs the parsing on a background thread and updates the UI on the EDT. Returns false
 	 * (without loading) when the tab already has a spec and the user declines to replace it.
 	 */
-	private fun loadAsync(source: String, block: () -> OpenApiParseResult): Boolean {
+	private fun loadAsync(source: String, block: () -> SpecImportResult): Boolean {
 		if (data.hasLoadedSpec && !confirmReplace()) return false
 		setButtonsEnabled(false)
 		setSummary("Loading $source ...")
@@ -283,7 +282,7 @@ class SpecTab(val data: SpecTabData) {
 			val result = try {
 				block()
 			} catch (e: Exception) {
-				OpenApiParseResult(null, listOf("Error: ${e.message}"))
+				SpecImportResult(null, listOf("Error: ${e.message}"), null)
 			}
 			SwingUtilities.invokeLater {
 				renderResult(source, result)
@@ -309,11 +308,10 @@ class SpecTab(val data: SpecTabData) {
 		return choice == JOptionPane.YES_OPTION
 	}
 
-	private fun renderResult(source: String, result: OpenApiParseResult) {
+	private fun renderResult(source: String, result: SpecImportResult) {
 		searchField.text = ""
-		val api = result.openAPI
-		if (api != null) {
-			val imported = OpenApiImporter.extract(api)
+		val imported = result.spec
+		if (imported != null) {
 			data.onSpecLoaded(imported, source)
 			tablePanel.setRows(data.endpoints)
 			tablePanel.setGlobalOverride(data.baseOverride)
@@ -341,9 +339,9 @@ class SpecTab(val data: SpecTabData) {
 		val sb = StringBuilder()
 		sb.appendLine(source)
 		if (spec != null) {
-			sb.appendLine("Title:    ${spec.title ?: "-"}")
-			sb.appendLine("Version:  ${spec.version ?: "-"}")
-			sb.appendLine("OpenAPI:  ${spec.openApiVersion ?: "-"}")
+			sb.appendLine("Title:     ${spec.title ?: "-"}")
+			sb.appendLine("Version:   ${spec.version ?: "-"}")
+			sb.appendLine("Format:    ${spec.format ?: "-"}")
 			sb.appendLine("Endpoints: ${spec.endpoints.size}")
 		} else {
 			sb.appendLine("Parsing failed.")
