@@ -3,6 +3,8 @@ package com.mattiadr.burpSpecDrift.spec.openapi
 import io.swagger.v3.core.util.Json
 import io.swagger.v3.oas.models.OpenAPI
 import io.swagger.v3.oas.models.media.Schema
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 
 /**
  * Builds a sample body from an OpenAPI schema (Swagger-UI style) when the spec provides no example.
@@ -15,6 +17,18 @@ object OpenApiSchemaExampleGenerator {
 	fun generateJson(schema: Schema<*>?, openAPI: OpenAPI): String? {
 		val value = build(schema, openAPI, HashSet()) ?: return null
 		return runCatching { Json.pretty(value) }.getOrNull()
+	}
+
+	/**
+	 * Returns an `application/x-www-form-urlencoded` sample for [schema] (its top-level object), as
+	 * `key=value&...` with keys and values URL-encoded. Nested objects/arrays are skipped, since the
+	 * format can't represent them flatly. Returns null when no scalar field could be built.
+	 */
+	fun generateFormUrlEncoded(schema: Schema<*>?, openAPI: OpenAPI): String? {
+		val map = build(schema, openAPI, HashSet()) as? Map<*, *> ?: return null
+		val fields = map.entries.filter { it.value != null && it.value !is Map<*, *> && it.value !is List<*> }
+		if (fields.isEmpty()) return null
+		return fields.joinToString("&") { (key, value) -> "${encode(key.toString())}=${encode(value.toString())}" }
 	}
 
 	/**
@@ -84,6 +98,8 @@ object OpenApiSchemaExampleGenerator {
 			else -> null
 		}
 	}
+
+	private fun encode(value: String): String = URLEncoder.encode(value, StandardCharsets.UTF_8)
 
 	private fun stringSample(format: String?): String = knownFormatSample(format) ?: "string"
 

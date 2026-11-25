@@ -151,7 +151,7 @@ class EndpointDetailPanel {
 
 		// Rebuild both body pickers; each editor follows its selection, disabled when only one choice.
 		updatingSelector = true
-		val requestChoices = row.requestBody?.contents.orEmpty().map { Choice(it.mediaType, it.example, it.mediaType) }
+		val requestChoices = row.requestBody?.contents.orEmpty().map { Choice(it.mediaType, it.example, it.mediaType, expectsBody = true) }
 		populate(requestSelector, requestChoices, if (row.requestBody == null) "No request body" else "No content")
 		populate(responseSelector, row.responses.map(::buildResponseChoice), "No responses")
 		updatingSelector = false
@@ -171,11 +171,11 @@ class EndpointDetailPanel {
 	}
 
 	private fun showSelectedRequest() {
-		requestEditor.contents = bytes((requestSelector.selectedItem as? Choice)?.example)
+		requestEditor.contents = editorBytes(requestSelector.selectedItem as? Choice)
 	}
 
 	private fun showSelectedResponse() {
-		responseEditor.contents = bytes((responseSelector.selectedItem as? Choice)?.example)
+		responseEditor.contents = editorBytes(responseSelector.selectedItem as? Choice)
 	}
 
 	private fun buildResponseChoice(response: ResponseInfo): Choice {
@@ -186,7 +186,7 @@ class EndpointDetailPanel {
 			response.description?.let { append(" — ").append(it) }
 			shown?.mediaType?.let { append("  [").append(it).append(']') }
 		}
-		return Choice(label, withExample?.example)
+		return Choice(label, withExample?.example, expectsBody = response.contents.isNotEmpty())
 	}
 
 	/** Builds the static two-column layout; the sections' contents are filled in per selection. */
@@ -265,7 +265,15 @@ class EndpointDetailPanel {
 		param.description?.let { append(" — ").append(it) }
 	}
 
-	private fun bytes(text: String?): MontoyaByteArray = MontoyaByteArray.byteArray(text ?: "")
+	/**
+	 * The editor contents for a dropdown [choice]: its example, a display-only placeholder when a body
+	 * is expected but none is available, or empty when no body is expected. This never affects what is
+	 * sent to Burp tools — that path reads the model's example directly.
+	 */
+	private fun editorBytes(choice: Choice?): MontoyaByteArray {
+		val text = choice?.example ?: if (choice?.expectsBody == true) NO_EXAMPLE else ""
+		return MontoyaByteArray.byteArray(text)
+	}
 
 	private fun readOnlyArea() = JTextArea().apply {
 		isEditable = false
@@ -289,13 +297,21 @@ class EndpointDetailPanel {
 	/**
 	 * One entry in a body dropdown: its display label and the example to show (if any). [mediaType] is
 	 * set only for request-body choices, so the send logic can honor the dropdown selection.
+	 * [expectsBody] is true when a body is declared for this choice, so a missing example shows the
+	 * "no example" placeholder rather than an empty editor (which is right when no body is expected).
 	 */
-	private class Choice(private val label: String, val example: String?, val mediaType: String? = null) {
+	private class Choice(
+		private val label: String,
+		val example: String?,
+		val mediaType: String? = null,
+		val expectsBody: Boolean = false,
+	) {
 		override fun toString(): String = label
 	}
 
 	companion object {
 		private const val CARD_SUMMARY = "summary"
 		private const val CARD_DETAIL = "detail"
+		private const val NO_EXAMPLE = "<no example available>"
 	}
 }
