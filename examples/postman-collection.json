@@ -1,0 +1,123 @@
+{
+	"info": {
+		"_postman_id": "0f6a2b7e-1c3d-4e5f-8a9b-0c1d2e3f4a5b",
+		"name": "SpecDrift Example API",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{ "key": "token", "value": "{{token}}", "type": "string" }
+		]
+	},
+	"variable": [
+		{ "key": "baseUrl", "value": "https://api.example.com" },
+		{ "key": "token", "value": "demo-token" }
+	],
+	"item": [
+		{
+			"name": "Users",
+			"item": [
+				{
+					"name": "List users",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Accept", "value": "application/json" }
+						],
+						"url": {
+							"raw": "{{baseUrl}}/users?limit=10",
+							"host": [ "{{baseUrl}}" ],
+							"path": [ "users" ],
+							"query": [
+								{ "key": "limit", "value": "10", "description": "Page size" }
+							]
+						}
+					},
+					"response": [
+						{
+							"name": "OK",
+							"status": "OK",
+							"code": 200,
+							"header": [
+								{ "key": "Content-Type", "value": "application/json" }
+							],
+							"body": "[{\"id\":1,\"name\":\"Ada\"}]"
+						}
+					]
+				},
+				{
+					"name": "Create admin user",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"admin\",\n  \"role\": \"admin\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": {
+							"raw": "{{baseUrl}}/users",
+							"host": [ "{{baseUrl}}" ],
+							"path": [ "users" ]
+						}
+					}
+				},
+				{
+					"name": "Create guest user",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"guest\",\n  \"role\": \"guest\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": {
+							"raw": "{{baseUrl}}/users",
+							"host": [ "{{baseUrl}}" ],
+							"path": [ "users" ]
+						}
+					}
+				},
+				{
+					"name": "Get user by id",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{baseUrl}}/users/:id",
+							"host": [ "{{baseUrl}}" ],
+							"path": [ "users", ":id" ],
+							"variable": [
+								{ "key": "id", "value": "42", "description": "User id" }
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Login",
+			"request": {
+				"method": "POST",
+				"auth": { "type": "noauth" },
+				"body": {
+					"mode": "urlencoded",
+					"urlencoded": [
+						{ "key": "username", "value": "ada" },
+						{ "key": "password", "value": "{{token}}" }
+					]
+				},
+				"url": {
+					"raw": "{{baseUrl}}/login",
+					"host": [ "{{baseUrl}}" ],
+					"path": [ "login" ]
+				}
+			}
+		}
+	]
+}

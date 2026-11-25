@@ -4,13 +4,14 @@ import com.mattiadr.burpSpecDrift.model.ImportedSpec
 import com.mattiadr.burpSpecDrift.spec.openapi.OpenApiImporter
 import com.mattiadr.burpSpecDrift.spec.openapi.OpenApiParseResult
 import com.mattiadr.burpSpecDrift.spec.openapi.OpenApiParser
+import com.mattiadr.burpSpecDrift.spec.postman.PostmanImporter
 import java.nio.file.Files
 import java.nio.file.Path
 
 /** A supported spec source format. */
 enum class SpecFormat(val label: String) {
 	OPENAPI("OpenAPI"),
-	// POSTMAN, BRUNO added together with their importers.
+	POSTMAN("Postman"),
 }
 
 /**
@@ -46,6 +47,7 @@ object SpecImporter {
 	/** Imports a spec from already-retrieved content (format auto-detected). */
 	fun importContent(content: String): SpecImportResult = when (detectFormat(content)) {
 		SpecFormat.OPENAPI -> fromOpenApi(OpenApiParser.parseContent(content))
+		SpecFormat.POSTMAN -> fromPostman(content)
 		null -> SpecImportResult(null, listOf("Unrecognized spec format."), null)
 	}
 
@@ -68,6 +70,7 @@ object SpecImporter {
 		val head = content.take(DETECT_PREFIX_LENGTH)
 		return when {
 			OPENAPI_HINT.containsMatchIn(head) -> SpecFormat.OPENAPI
+			POSTMAN_HINT.containsMatchIn(head) -> SpecFormat.POSTMAN
 			else -> null
 		}
 	}
@@ -77,8 +80,16 @@ object SpecImporter {
 		return SpecImportResult(OpenApiImporter.extract(api), result.messages, SpecFormat.OPENAPI)
 	}
 
+	private fun fromPostman(content: String): SpecImportResult = runCatching { PostmanImporter.import(content) }.fold(
+		onSuccess = { SpecImportResult(it, emptyList(), SpecFormat.POSTMAN) },
+		onFailure = { SpecImportResult(null, listOf("Postman import failed: ${it.message}"), SpecFormat.POSTMAN) },
+	)
+
 	private const val DETECT_PREFIX_LENGTH = 8192
 
 	/** Matches `"openapi":`, `openapi:`, `"swagger":`, `swagger:` (JSON or YAML). */
 	private val OPENAPI_HINT = Regex("""["']?(openapi|swagger)["']?\s*:""", RegexOption.IGNORE_CASE)
+
+	/** Matches a Postman collection: its schema URL or the `_postman_id` marker. */
+	private val POSTMAN_HINT = Regex("""schema\.(get)?postman\.com|_postman_id""", RegexOption.IGNORE_CASE)
 }
